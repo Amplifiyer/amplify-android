@@ -27,6 +27,7 @@ import com.amplifyframework.core.Action;
 import com.amplifyframework.core.Consumer;
 import com.amplifyframework.core.async.NoOpCancelable;
 import com.amplifyframework.core.model.Model;
+import com.amplifyframework.core.model.ModelSchema;
 import com.amplifyframework.datastore.DataStoreException;
 import com.amplifyframework.testutils.random.RandomString;
 import com.amplifyframework.util.Time;
@@ -134,12 +135,13 @@ public final class AppSyncMocking {
          * @param model When this model is received, mock is enacted. This model is passed back in response.
          * @param <T> Type of model
          * @return A create configurator
+         * @throws AmplifyException when modelClass cannot be converted to modelSchema
          */
-        public <T extends Model> CreateConfigurator mockResponse(T model) {
+        public <T extends Model> CreateConfigurator mockResponse(T model) throws AmplifyException {
             doAnswer(invocation -> {
                 // Simulate a successful response callback from the create() method.
                 final int indexOfModelBeingCreated = 0;
-                final int indexOfResultConsumer = 1;
+                final int indexOfResultConsumer = 2;
                 T capturedModel = invocation.getArgument(indexOfModelBeingCreated);
 
                 // Pass back a ModelWithMetadata. Model is the one provided.
@@ -154,6 +156,7 @@ public final class AppSyncMocking {
                 return new NoOpCancelable();
             }).when(appSync).create(
                 eq(model),
+                any(),
                 any(), // onResponse
                 any() // onFailure
             );
@@ -183,9 +186,10 @@ public final class AppSyncMocking {
          * @param model When this model is received, mock is enacted. This model is passed back in response.
          * @param <T> Type of model
          * @return A create configurator
+         * @throws AmplifyException when modelClass cannot be converted to modelSchema
          */
         @NonNull
-        public <T extends Model> DeleteConfigurator mockResponse(T model) {
+        public <T extends Model> DeleteConfigurator mockResponse(T model) throws AmplifyException {
             doAnswer(invocation -> {
                 // Simulate a successful response callback from the delete() method.
                 final int indexOfModelId = 1;
@@ -204,7 +208,7 @@ public final class AppSyncMocking {
                 // Technically, delete() returns a Cancelable...
                 return new NoOpCancelable();
             }).when(appSync).delete(
-                eq(model.getClass()), // Class of the model
+                eq(ModelSchema.fromModelClass(model.getClass())), // Class of the model
                 eq(model.getId()), // model ID
                 anyInt(), // version
                 any(), // predicate
@@ -235,10 +239,10 @@ public final class AppSyncMocking {
         private <M extends Model> SyncConfigurator mockBuildSyncRequest() throws DataStoreException {
             when(appSync.buildSyncRequest(any(), any(), any()))
                     .thenAnswer((Answer<GraphQLRequest<PaginatedResult<ModelWithMetadata<M>>>>) invocation -> {
-                        Class<M> modelClass = invocation.getArgument(0);
+                        ModelSchema schema = invocation.getArgument(0);
                         Long lastSync = invocation.getArgument(1);
                         Integer syncPageSize = invocation.getArgument(2);
-                        return AppSyncRequestFactory.buildSyncRequest(modelClass, lastSync, syncPageSize);
+                        return AppSyncRequestFactory.buildSyncRequest(schema, lastSync, syncPageSize);
                     });
             return this;
         }
@@ -267,6 +271,7 @@ public final class AppSyncMocking {
          * @param responseItems The items that should be included in the mocked response, for the model class
          * @param <M> Type of models for which a response is mocked
          * @return The same Configurator instance, to enable chaining of calls
+         * @throws AmplifyException when modelClass cannot be converted to modelSchema
          */
         @SuppressWarnings("varargs")
         @SafeVarargs
@@ -303,7 +308,8 @@ public final class AppSyncMocking {
             final Iterable<ModelWithMetadata<M>> items = new HashSet<>(Arrays.asList(responseItems));
             AppSyncGraphQLRequest<PaginatedResult<ModelWithMetadata<M>>> requestForNextResult = null;
             if (nextToken != null) {
-                requestForNextResult = AppSyncRequestFactory.buildSyncRequest(modelClass, null, null)
+                requestForNextResult =
+                    AppSyncRequestFactory.buildSyncRequest(ModelSchema.fromModelClass(modelClass), null, null)
                         .newBuilder()
                         .variable("nextToken", "String", nextToken)
                         .build();
@@ -385,7 +391,7 @@ public final class AppSyncMocking {
 
     /**
      * Configures mock behaviors on an {@link AppSync} instance, to occur when
-     * {@link AppSync#onCreate(Class, Consumer, Consumer, Consumer, Action)} is invoked.
+     * {@link AppSync#onCreate(ModelSchema, Consumer, Consumer, Consumer, Action)} is invoked.
      */
     public static final class OnCreateConfigurator {
         private final AppSync appSync;
@@ -395,7 +401,7 @@ public final class AppSyncMocking {
         }
 
         /**
-         * In response to {@link AppSync#onCreate(Class, Consumer, Consumer, Consumer, Action)} being
+         * In response to {@link AppSync#onCreate(ModelSchema, Consumer, Consumer, Consumer, Action)} being
          * called, the onStart consumer will be called back immediately.
          * @return The current configurator instance, for fluent method chaining
          */
@@ -418,7 +424,7 @@ public final class AppSyncMocking {
 
     /**
      * Configured mocked behaviors on an {@link AppSync} instance,
-     * to be invoked when {@link AppSync#onUpdate(Class, Consumer, Consumer, Consumer, Action)}
+     * to be invoked when {@link AppSync#onUpdate(ModelSchema, Consumer, Consumer, Consumer, Action)}
      * is called.
      */
     public static final class OnUpdateConfigurator {
@@ -429,7 +435,7 @@ public final class AppSyncMocking {
         }
 
         /**
-         * In response to {@link AppSync#onUpdate(Class, Consumer, Consumer, Consumer, Action)} being
+         * In response to {@link AppSync#onUpdate(ModelSchema, Consumer, Consumer, Consumer, Action)} being
          * called, the onStart consumer will be called back immediately.
          * @return The current configurator instance, for fluent method chaining
          */
@@ -451,7 +457,7 @@ public final class AppSyncMocking {
     }
 
     /**
-     * Configures mock behaviors for when {@link AppSync#onDelete(Class, Consumer, Consumer, Consumer, Action)}
+     * Configures mock behaviors for when {@link AppSync#onDelete(ModelSchema, Consumer, Consumer, Consumer, Action)}
      * is called.
      */
     public static final class OnDeleteConfigurator {
@@ -462,7 +468,7 @@ public final class AppSyncMocking {
         }
 
         /**
-         * In response to {@link AppSync#onDelete(Class, Consumer, Consumer, Consumer, Action)} being
+         * In response to {@link AppSync#onDelete(ModelSchema, Consumer, Consumer, Consumer, Action)} being
          * called, the onStart consumer will be called back immediately.
          * @return The current configurator instance, for fluent method chaining
          */

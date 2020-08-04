@@ -49,6 +49,15 @@ public final class ModelSchemaRegistry {
     }
 
     /**
+     * Create the ModelSchema objects for all Model classes.
+     * @param modelSchemas the map that contains mapping of ModelName to ModelSchema.
+     * @throws AmplifyException if unable to create a Model Schema for a model
+     */
+    public synchronized void load(@NonNull Map<String, ModelSchema> modelSchemas) throws AmplifyException {
+        modelSchemaMap.putAll(modelSchemas);
+    }
+
+    /**
      * Retrieve the ModelSchema object for the given Model class.
      * @param classSimpleName name of the Model class retrieved through
      *                        {@link Class#getSimpleName()} method.

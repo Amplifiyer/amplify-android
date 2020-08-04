@@ -18,6 +18,7 @@ package com.amplifyframework.api.aws;
 import com.amplifyframework.api.graphql.GraphQLLocation;
 import com.amplifyframework.api.graphql.GraphQLPathSegment;
 import com.amplifyframework.api.graphql.GraphQLResponse;
+import com.amplifyframework.core.util.GsonUtil;
 
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;

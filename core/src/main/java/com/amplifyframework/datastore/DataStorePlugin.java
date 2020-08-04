@@ -20,8 +20,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.WorkerThread;
 
 import com.amplifyframework.AmplifyException;
+import com.amplifyframework.core.Consumer;
 import com.amplifyframework.core.category.CategoryType;
+import com.amplifyframework.core.model.Model;
 import com.amplifyframework.core.plugin.Plugin;
+
+import java.util.Iterator;
 
 /**
  * A plugin which implements the required behavior of the {@link DataStoreCategory}.
@@ -38,5 +42,18 @@ public abstract class DataStorePlugin<E> implements DataStoreCategoryBehavior, P
     @WorkerThread
     @Override
     public void initialize(@NonNull Context context) throws AmplifyException {
+    }
+
+    /**
+     * Query the DataStore to find all items of the requested model (by name).
+     * NOTE: Private method and should not be part of {@link DataStoreCategory}
+     * @param modelName name of the Model to query
+     * @param onQueryResults Called when a query successfully returns 0 or more results
+     * @param onQueryFailure Called when a failure interrupts successful completion of a query
+     */
+    public void query(
+            @NonNull String modelName,
+            @NonNull Consumer<Iterator<? extends Model>> onQueryResults,
+            @NonNull Consumer<DataStoreException> onQueryFailure) {
     }
 }

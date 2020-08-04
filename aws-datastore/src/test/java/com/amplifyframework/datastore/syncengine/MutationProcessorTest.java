@@ -15,7 +15,8 @@
 
 package com.amplifyframework.datastore.syncengine;
 
-import com.amplifyframework.datastore.DataStoreException;
+import com.amplifyframework.AmplifyException;
+import com.amplifyframework.core.model.ModelSchemaRegistry;
 import com.amplifyframework.datastore.appsync.AppSync;
 import com.amplifyframework.datastore.appsync.AppSyncMocking;
 import com.amplifyframework.datastore.storage.InMemoryStorageAdapter;
@@ -26,6 +27,7 @@ import com.amplifyframework.hub.HubEvent;
 import com.amplifyframework.testmodels.commentsblog.BlogOwner;
 import com.amplifyframework.testutils.HubAccumulator;
 
+import com.google.common.collect.ImmutableSet;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -50,31 +52,36 @@ public final class MutationProcessorTest {
     private MutationOutbox mutationOutbox;
     private AppSync appSync;
     private MutationProcessor mutationProcessor;
+    private ModelSchemaRegistry modelSchemaRegistry;
 
     /**
      * A {@link MutationProcessor} is being tested. To do so, we arrange mutations into
      * an {@link MutationOutbox}. Fake responses are returned from a mock {@link AppSync}.
+     * @throws AmplifyException while loading the modelSchemaRegistry
      */
     @Before
-    public void setup() {
+    public void setup() throws AmplifyException {
         LocalStorageAdapter localStorageAdapter = InMemoryStorageAdapter.create();
         this.synchronousStorageAdapter = SynchronousStorageAdapter.delegatingTo(localStorageAdapter);
         this.mutationOutbox = new PersistentMutationOutbox(localStorageAdapter);
         VersionRepository versionRepository = new VersionRepository(localStorageAdapter);
         Merger merger = new Merger(mutationOutbox, versionRepository, localStorageAdapter);
         this.appSync = mock(AppSync.class);
-        this.mutationProcessor = new MutationProcessor(merger, versionRepository, mutationOutbox, appSync);
+        this.modelSchemaRegistry = ModelSchemaRegistry.instance();
+        this.modelSchemaRegistry.load(ImmutableSet.of(BlogOwner.class));
+        this.mutationProcessor =
+            new MutationProcessor(merger, versionRepository, modelSchemaRegistry, mutationOutbox, appSync);
     }
 
     /**
      * Tests the {@link MutationProcessor#startDrainingMutationOutbox()}. After this method
      * is called, any content in the {@link MutationOutbox} should be published via the {@link AppSync}
      * and then removed.
-     * @throws DataStoreException On failure to interact with storage adapter during arrangement
+     * @throws AmplifyException On failure to interact with storage adapter during arrangement
      *                            and verification
      */
     @Test
-    public void canDrainMutationOutbox() throws DataStoreException {
+    public void canDrainMutationOutbox() throws AmplifyException {
         // We will attempt to "sync" this model.
         BlogOwner tony = BlogOwner.builder()
             .name("Tony Daniels")
@@ -106,6 +113,6 @@ public final class MutationProcessorTest {
         assertFalse(mutationOutbox.hasPendingMutation(tony.getId()));
 
         // And that it was passed to AppSync for publication.
-        verify(appSync).create(eq(tony), any(), any());
+        verify(appSync).create(eq(tony), any(), any(), any());
     }
 }

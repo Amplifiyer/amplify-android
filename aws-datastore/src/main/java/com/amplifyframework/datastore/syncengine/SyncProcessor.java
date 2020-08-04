@@ -54,7 +54,7 @@ import io.reactivex.rxjava3.processors.BehaviorProcessor;
  * "Hydrates" the local DataStore, using model metadata receive from the
  * {@link AppSync#sync(GraphQLRequest, Consumer, Consumer)}.
  * Hydration refers to populating the local storage with values from a remote system.
- *
+ * <p>
  * For all items returned by the sync, merge them back into local storage through
  * the {@link Merger}.
  */
@@ -70,23 +70,25 @@ final class SyncProcessor {
     private final String[] modelNames;
 
     private SyncProcessor(
-            ModelProvider modelProvider,
-            ModelSchemaRegistry modelSchemaRegistry,
-            SyncTimeRegistry syncTimeRegistry,
-            AppSync appSync,
-            Merger merger,
-            DataStoreConfigurationProvider dataStoreConfigurationProvider) {
+        ModelProvider modelProvider,
+        ModelSchemaRegistry modelSchemaRegistry,
+        SyncTimeRegistry syncTimeRegistry,
+        AppSync appSync,
+        Merger merger,
+        DataStoreConfigurationProvider dataStoreConfigurationProvider) {
         this.modelProvider = Objects.requireNonNull(modelProvider);
         this.modelSchemaRegistry = Objects.requireNonNull(modelSchemaRegistry);
         this.syncTimeRegistry = Objects.requireNonNull(syncTimeRegistry);
         this.appSync = Objects.requireNonNull(appSync);
         this.merger = Objects.requireNonNull(merger);
         this.dataStoreConfigurationProvider = dataStoreConfigurationProvider;
-        this.modelNames = ForEach.inCollection(modelProvider.models(), Class::getSimpleName).toArray(new String[0]);
+        this.modelNames =
+            ForEach.inCollection(modelProvider.modelSchemas().values(), ModelSchema::getName).toArray(new String[0]);
     }
 
     /**
      * Gets a builder of {@link SyncProcessor}.
+     *
      * @return A {@link SyncProcessor.Builder} instance
      */
     public static Builder builder() {
@@ -96,21 +98,21 @@ final class SyncProcessor {
     /**
      * The task of hydrating the DataStore either succeeds (with no return value),
      * or it fails, with an explanation.
+     *
      * @return An Rx {@link Completable} which can be used to perform the operation.
      */
     Completable hydrate() {
         ModelClassComparator modelClassComparator =
-                new ModelClassComparator(modelProvider, modelSchemaRegistry);
+            new ModelClassComparator(modelProvider, modelSchemaRegistry);
 
         final List<Completable> hydrationTasks = new ArrayList<>();
-        List<Class<? extends Model>> modelClsList =
-            new ArrayList<Class<? extends Model>>(modelProvider.models());
+        List<ModelSchema> modelSchemas = new ArrayList<>(modelProvider.modelSchemas().values());
 
         // And sort them all, according to their model's topological order,
         // So that when we save them, the references will exist.
-        Collections.sort(modelClsList, modelClassComparator::compare);
-        for (Class<? extends Model> clazz : modelClsList) {
-            hydrationTasks.add(createHydrationTask(clazz));
+        Collections.sort(modelSchemas, modelClassComparator::compareSchema);
+        for (ModelSchema schema : modelSchemas) {
+            hydrationTasks.add(createHydrationTask(schema));
         }
 
         return Completable.concat(hydrationTasks)
@@ -131,14 +133,14 @@ final class SyncProcessor {
             });
     }
 
-    private Completable createHydrationTask(Class<? extends Model> modelClass) {
-        ModelSyncMetricsAccumulator metricsAccumulator = new ModelSyncMetricsAccumulator(modelClass);
-        return syncTimeRegistry.lookupLastSyncTime(modelClass)
+    private Completable createHydrationTask(ModelSchema schema) {
+        ModelSyncMetricsAccumulator metricsAccumulator = new ModelSyncMetricsAccumulator(schema.getName());
+        return syncTimeRegistry.lookupLastSyncTime(schema.getName())
             .map(this::filterOutOldSyncTimes)
             // And for each, perform a sync. The network response will contain an Iterable<ModelWithMetadata<T>>
             .flatMap(lastSyncTime -> {
                 // Sync all the pages
-                return syncModel(modelClass, lastSyncTime)
+                return syncModel(schema, lastSyncTime)
                     // For each ModelWithMetadata, merge it into the local store.
                     .flatMapCompletable(modelWithMetadata ->
                         merger.merge(modelWithMetadata, metricsAccumulator::increment)
@@ -147,11 +149,11 @@ final class SyncProcessor {
             })
             .flatMapCompletable(syncType -> {
                 Completable syncTimeSaveCompletable = SyncType.DELTA.equals(syncType) ?
-                    syncTimeRegistry.saveLastDeltaSyncTime(modelClass, SyncTime.now()) :
-                    syncTimeRegistry.saveLastBaseSyncTime(modelClass, SyncTime.now());
+                    syncTimeRegistry.saveLastDeltaSyncTime(schema.getName(), SyncTime.now()) :
+                    syncTimeRegistry.saveLastBaseSyncTime(schema.getName(), SyncTime.now());
                 return syncTimeSaveCompletable.andThen(Completable.fromAction(() -> {
                     Amplify.Hub.publish(HubChannel.DATASTORE,
-                                        metricsAccumulator.toModelSyncedEvent(syncType).toHubEvent());
+                        metricsAccumulator.toModelSyncedEvent(syncType).toHubEvent());
                 }));
             })
             .doOnError(failureToSync -> {
@@ -172,6 +174,7 @@ final class SyncProcessor {
      * If a sync time is older than (now) - (the base sync interval), regard the provided sync time
      * as "too old", and return {@link SyncTime#never()}, instead. In all other cases,
      * just return the provided value.
+     *
      * @param lastSyncTime The time of a last successful sync.
      * @return The input, or {@link SyncTime#never()}, if the last sync time is "too old."
      */
@@ -195,59 +198,60 @@ final class SyncProcessor {
     /**
      * Sync models for a given model class.
      * This involves three steps:
-     *  1. Lookup the last time the model class was synced;
-     *  2. Make a request to the AppSync endpoint. If the last sync time is within a recent window
-     *     of time, then request a *delta* sync. If the last sync time is outside a recent window of time,
-     *     perform a *base* sync. A base sync is preformed by passing null.
-     *  3. Continue fetching paged results until !hasNextResult() or we have synced the max records.
+     * 1. Lookup the last time the model class was synced;
+     * 2. Make a request to the AppSync endpoint. If the last sync time is within a recent window
+     * of time, then request a *delta* sync. If the last sync time is outside a recent window of time,
+     * perform a *base* sync. A base sync is preformed by passing null.
+     * 3. Continue fetching paged results until !hasNextResult() or we have synced the max records.
      *
-     * @param modelClass The model class to sync
+     * @param schema   The schema of the model to sync
      * @param syncTime The time of a last successful sync.
-     * @param <T> The type of model to sync.
+     * @param <T>      The type of model to sync.
      * @return a stream of all ModelWithMetadata&lt;T&gt; objects from all pages for the provided model.
      * @throws DataStoreException if dataStoreConfigurationProvider.getConfiguration() fails
      */
-    private <T extends Model> Flowable<ModelWithMetadata<T>> syncModel(Class<T> modelClass, SyncTime syncTime)
-            throws DataStoreException {
+    private <T extends Model> Flowable<ModelWithMetadata<T>> syncModel(ModelSchema schema, SyncTime syncTime)
+        throws DataStoreException {
         final Long lastSyncTimeAsLong = syncTime.exists() ? syncTime.toLong() : null;
         final Integer syncPageSize = dataStoreConfigurationProvider.getConfiguration().getSyncPageSize();
 
         // Create a BehaviorProcessor, and set the default value to a GraphQLRequest that fetches the first page.
         BehaviorProcessor<GraphQLRequest<PaginatedResult<ModelWithMetadata<T>>>> processor =
-                BehaviorProcessor.createDefault(appSync.buildSyncRequest(modelClass, lastSyncTimeAsLong, syncPageSize));
+            BehaviorProcessor.createDefault(appSync.buildSyncRequest(schema, lastSyncTimeAsLong, syncPageSize));
 
         return processor.concatMap(request -> syncPage(request).toFlowable())
-                .doOnNext(paginatedResult -> {
-                    if (paginatedResult.hasNextResult()) {
-                        processor.onNext(paginatedResult.getRequestForNextResult());
-                    } else {
-                        processor.onComplete();
-                    }
-                })
-                // Flatten the PaginatedResult objects into a stream of ModelWithMetadata objects.
-                .concatMapIterable(PaginatedResult::getItems)
-                // Stop after fetching the maximum configured records to sync.
-                .take(dataStoreConfigurationProvider.getConfiguration().getSyncMaxRecords());
+            .doOnNext(paginatedResult -> {
+                if (paginatedResult.hasNextResult()) {
+                    processor.onNext(paginatedResult.getRequestForNextResult());
+                } else {
+                    processor.onComplete();
+                }
+            })
+            // Flatten the PaginatedResult objects into a stream of ModelWithMetadata objects.
+            .concatMapIterable(PaginatedResult::getItems)
+            // Stop after fetching the maximum configured records to sync.
+            .take(dataStoreConfigurationProvider.getConfiguration().getSyncMaxRecords());
     }
 
     /**
      * Fetches one page for a sync.
+     *
      * @param request GraphQLRequest object for the sync, obtained from {@link AppSync#buildSyncRequest}, or from
      *                response.getData().getRequestForNextResult() for subsequent requests.
-     * @param <T> The type of model to sync.
+     * @param <T>     The type of model to sync.
      */
     private <T extends Model> Single<PaginatedResult<ModelWithMetadata<T>>> syncPage(
-            GraphQLRequest<PaginatedResult<ModelWithMetadata<T>>> request) {
+        GraphQLRequest<PaginatedResult<ModelWithMetadata<T>>> request) {
         return Single.create(emitter -> {
             Cancelable cancelable = appSync.sync(request, result -> {
                 if (result.hasErrors()) {
                     emitter.onError(new DataStoreException(
-                            String.format("A model sync failed: %s", result.getErrors()),
-                            "Check your schema."
+                        String.format("A model sync failed: %s", result.getErrors()),
+                        "Check your schema."
                     ));
                 } else if (!result.hasData()) {
                     emitter.onError(new DataStoreException(
-                            "Empty response from AppSync.", "Report to AWS team."
+                        "Empty response from AppSync.", "Report to AWS team."
                     ));
                 } else {
                     emitter.onSuccess(result.getData());
@@ -261,7 +265,7 @@ final class SyncProcessor {
      * Builds instances of {@link SyncProcessor}s.
      */
     public static final class Builder implements ModelProviderStep, ModelSchemaRegistryStep,
-            SyncTimeRegistryStep, AppSyncStep, MergerStep, DataStoreConfigurationProviderStep, BuildStep {
+        SyncTimeRegistryStep, AppSyncStep, MergerStep, DataStoreConfigurationProviderStep, BuildStep {
         private ModelProvider modelProvider;
         private ModelSchemaRegistry modelSchemaRegistry;
         private SyncTimeRegistry syncTimeRegistry;
@@ -373,21 +377,31 @@ final class SyncProcessor {
         ModelClassComparator(ModelProvider modelProvider, ModelSchemaRegistry modelSchemaRegistry) {
             this.modelSchemaRegistry = modelSchemaRegistry;
             this.topologicalOrdering =
-                    TopologicalOrdering.forRegisteredModels(modelSchemaRegistry, modelProvider);
+                TopologicalOrdering.forRegisteredModels(modelSchemaRegistry, modelProvider);
         }
 
         private <M extends Class<? extends Model>> int compare(M left, M right) {
             return topologicalOrdering.compare(schemaFor(left), schemaFor(right));
         }
 
+        private int compareSchema(ModelSchema left, ModelSchema right) {
+            return topologicalOrdering.compare(left, right);
+        }
+
         /**
          * Gets the model schema for a model.
+         *
          * @param modelCls A model with metadata about it
-         * @param <M> Type for ModelWithMetadata containing arbitrary model instances
+         * @param <M>      Type for ModelWithMetadata containing arbitrary model instances
          * @return Model Schema for model
          */
         @NonNull
         private <M extends Class<? extends Model>> ModelSchema schemaFor(M modelCls) {
+            // Todo, how to get the right model class now.
+//            if (modelCls.getClass() == SerializedModel.class) {
+//                return modelSchemaRegistry.getModelSchemaForModelClass(
+//                    ((SerializedModel) modelCls.getModel()).getModelName());
+//            }
             return modelSchemaRegistry.getModelSchemaForModelClass(modelCls.getSimpleName());
         }
     }

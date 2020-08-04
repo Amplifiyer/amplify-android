@@ -44,7 +44,7 @@ import io.reactivex.rxjava3.core.Observable;
  * flow of execution.
  */
 public final class SynchronousStorageAdapter {
-    private static final long DEFAULT_OPERATION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(2);
+    private static final long DEFAULT_OPERATION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(2000);
 
     private final long operationTimeoutMs;
     private final LocalStorageAdapter asyncDelegate;

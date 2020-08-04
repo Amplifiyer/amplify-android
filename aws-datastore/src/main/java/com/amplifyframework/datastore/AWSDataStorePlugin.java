@@ -328,6 +328,17 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
      * {@inheritDoc}
      */
     @Override
+    public void query(
+            @NonNull String modelName,
+            @NonNull Consumer<Iterator<? extends Model>> onQueryResults,
+            @NonNull Consumer<DataStoreException> onQueryFailure) {
+        beforeOperation(() -> sqliteStorageAdapter.query(modelName, onQueryResults, onQueryFailure));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public <T extends Model> void query(
             @NonNull Class<T> itemClass,
             @NonNull QueryPredicate queryPredicate,

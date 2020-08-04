@@ -23,7 +23,9 @@ import com.amplifyframework.AmplifyException;
 import com.amplifyframework.api.graphql.Operation;
 import com.amplifyframework.api.graphql.QueryType;
 import com.amplifyframework.core.model.Model;
+import com.amplifyframework.core.model.ModelField;
 import com.amplifyframework.core.model.ModelSchema;
+import com.amplifyframework.core.model.ModelSchemaRegistry;
 import com.amplifyframework.util.Empty;
 import com.amplifyframework.util.FieldFinder;
 import com.amplifyframework.util.Wrap;
@@ -34,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -153,11 +156,17 @@ public final class SelectionSet {
         private Class<? extends Model> modelClass;
         private Operation operation;
         private GraphQLRequestOptions requestOptions;
+        private ModelSchema modelSchema;
 
         Builder() { }
 
         public Builder modelClass(@NonNull Class<? extends Model> modelClass) {
             this.modelClass = Objects.requireNonNull(modelClass);
+            return Builder.this;
+        }
+
+        public Builder modelSchema(@NonNull ModelSchema modelSchema) {
+            this.modelSchema = Objects.requireNonNull(modelSchema);
             return Builder.this;
         }
 
@@ -177,9 +186,15 @@ public final class SelectionSet {
          * @throws AmplifyException if a ModelSchema cannot be created from the provided model class.
          */
         public SelectionSet build() throws AmplifyException {
-            Objects.requireNonNull(this.modelClass);
+            if (this.modelClass == null && this.modelSchema == null) {
+                throw new AmplifyException("Both modelClass and modelSchema cannot be null",
+                        "Provide either a modelClass or a modelSchema to build the selection set");
+            }
             Objects.requireNonNull(this.operation);
-            SelectionSet node = new SelectionSet(null, getModelFields(modelClass, requestOptions.maxDepth()));
+            SelectionSet node = new SelectionSet(null,
+                    this.modelClass != null
+                            ? getModelFields(modelClass, requestOptions.maxDepth())
+                            : getModelFields(this.modelSchema, requestOptions.maxDepth()));
             if (QueryType.LIST.equals(operation) || QueryType.SYNC.equals(operation)) {
                 node = wrapPagination(node);
             }
@@ -235,6 +250,40 @@ public final class SelectionSet {
                         }
                     } else if (depth >= 1) {
                         Set<SelectionSet> fields = getModelFields((Class<Model>) field.getType(), depth - 1);
+                        result.add(new SelectionSet(fieldName, fields));
+                    }
+                } else {
+                    result.add(new SelectionSet(fieldName, null));
+                }
+            }
+            for (String fieldName : requestOptions.modelMetaFields()) {
+                result.add(new SelectionSet(fieldName, null));
+            }
+            return result;
+        }
+
+        private Set<SelectionSet> getModelFields(ModelSchema modelSchema, int depth) {
+            if (depth < 0) {
+                return new HashSet<>();
+            }
+            Set<SelectionSet> result = new HashSet<>();
+            if (depth == 0 && LeafSerializationBehavior.JUST_ID.equals(requestOptions.leafSerializationBehavior())) {
+                result.add(new SelectionSet("id", null));
+                return result;
+            }
+            for (Map.Entry<String, ModelField> entry : modelSchema.getFields().entrySet()) {
+                String fieldName = entry.getKey();
+                if (modelSchema.getAssociations().containsKey(fieldName)) {
+                    if (depth >= 1) {
+                        String associatedModelName = modelSchema.getAssociations().get(fieldName).getAssociatedType();
+                        ModelSchema associateModelSchema = ModelSchemaRegistry.instance()
+                                .getModelSchemaForModelClass(associatedModelName);
+                        Set<SelectionSet> fields;
+                        if (entry.getValue().isArray()) { // If modelField is an Array
+                            fields = wrapPagination(getModelFields(associateModelSchema, depth - 1));
+                        } else {
+                            fields = getModelFields(associateModelSchema, depth - 1);
+                        }
                         result.add(new SelectionSet(fieldName, fields));
                     }
                 } else {

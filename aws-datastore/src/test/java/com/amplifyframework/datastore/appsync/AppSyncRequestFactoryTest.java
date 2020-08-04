@@ -15,13 +15,19 @@
 
 package com.amplifyframework.datastore.appsync;
 
+import com.amplifyframework.AmplifyException;
 import com.amplifyframework.api.graphql.GraphQLRequest;
 import com.amplifyframework.api.graphql.SubscriptionType;
-import com.amplifyframework.datastore.DataStoreException;
+import com.amplifyframework.core.model.ModelSchema;
 import com.amplifyframework.testmodels.commentsblog.Blog;
 import com.amplifyframework.testmodels.commentsblog.BlogOwner;
 import com.amplifyframework.testmodels.commentsblog.Comment;
 import com.amplifyframework.testmodels.commentsblog.Post;
+import com.amplifyframework.testmodels.parenting.Address;
+import com.amplifyframework.testmodels.parenting.Child;
+import com.amplifyframework.testmodels.parenting.City;
+import com.amplifyframework.testmodels.parenting.Parent;
+import com.amplifyframework.testmodels.parenting.Phonenumber;
 import com.amplifyframework.testmodels.personcar.Person;
 import com.amplifyframework.testutils.Resources;
 
@@ -31,6 +37,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.skyscreamer.jsonassert.JSONAssert;
 
+import java.util.Arrays;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -43,40 +50,69 @@ public final class AppSyncRequestFactoryTest {
 
     /**
      * Validates the construction of a base-sync query document.
-     * @throws DataStoreException On failure to interrogate fields in Blog.class
+     *
+     * @throws AmplifyException On failure to interrogate fields in Blog.class
+     * @throws JSONException    from JSONAssert.assertEquals
+     */
+    @Test
+    public void validateRequestGenerationForBaseSync() throws AmplifyException, JSONException {
+        JSONAssert.assertEquals(
+                Resources.readAsString("base-sync-request-document-for-blog-owner.txt"),
+                AppSyncRequestFactory.buildSyncRequest(
+                        ModelSchema.fromModelClass(BlogOwner.class),
+                        null,
+                        null)
+                        .getContent(),
+                true
+        );
+    }
+
+    /**
+     * Validates the construction of a base-sync query document for models with custom types.
+     * @throws AmplifyException On failure to interrogate fields in Parent.class
      * @throws JSONException from JSONAssert.assertEquals
      */
     @Test
-    public void validateRequestGenerationForBaseSync() throws DataStoreException, JSONException {
+    public void validateCustomTypeRequestGenerationForBaseSync() throws AmplifyException, JSONException {
         JSONAssert.assertEquals(
-            Resources.readAsString("base-sync-request-document-for-blog-owner.txt"),
-            AppSyncRequestFactory.buildSyncRequest(BlogOwner.class, null, null).getContent(),
-            true
+                Resources.readAsString("base-sync-request-document-for-parent.txt"),
+                AppSyncRequestFactory.buildSyncRequest(
+                    ModelSchema.fromModelClass(Parent.class),
+                    null,
+                    null)
+                    .getContent(),
+                true
         );
     }
 
     /**
      * Validates the construction of a delta-sync query document.
-     * @throws DataStoreException On failure to interrogate fields in Blog.class.
-     * @throws JSONException from JSONAssert.assertEquals
+     *
+     * @throws AmplifyException On failure to interrogate fields in Blog.class.
+     * @throws JSONException    from JSONAssert.assertEquals
      */
     @Test
-    public void validateRequestGenerationForDeltaSync() throws DataStoreException, JSONException {
+    public void validateRequestGenerationForDeltaSync() throws AmplifyException, JSONException {
         JSONAssert.assertEquals(Resources.readAsString("delta-sync-request-document-for-post.txt"),
-                AppSyncRequestFactory.buildSyncRequest(Post.class, 123123123L, null).getContent(),
+                AppSyncRequestFactory.buildSyncRequest(
+                        ModelSchema.fromModelClass(Post.class),
+                        123123123L,
+                        null)
+                        .getContent(),
                 true);
     }
 
     /**
      * Validates that the nextToken parameter is correctly generate for a Sync query.
-     * @throws DataStoreException On failure to interrogate the BlogOwner.class.
-     * @throws JSONException from JSONAssert.assertEquals.
+     *
+     * @throws AmplifyException On failure to interrogate the BlogOwner.class.
+     * @throws JSONException    from JSONAssert.assertEquals.
      */
     @Test
-    public void validateRequestGenerationForPagination() throws DataStoreException, JSONException {
+    public void validateRequestGenerationForPagination() throws AmplifyException, JSONException {
         Integer limit = 1000;
         final GraphQLRequest<Iterable<Post>> request =
-                AppSyncRequestFactory.buildSyncRequest(BlogOwner.class, null, limit);
+                AppSyncRequestFactory.buildSyncRequest(ModelSchema.fromModelClass(BlogOwner.class), null, limit);
         JSONAssert.assertEquals(Resources.readAsString("base-sync-request-paginating-blog-owners.txt"),
                 request.getContent(),
                 true);
@@ -84,104 +120,156 @@ public final class AppSyncRequestFactoryTest {
 
     /**
      * Checks that we're getting the expected output for a mutation with predicate.
-     * @throws DataStoreException If the output does not match.
-     * @throws JSONException from JSONAssert.assertEquals.
+     *
+     * @throws AmplifyException If the output does not match.
+     * @throws JSONException    from JSONAssert.assertEquals.
      */
     @Test
-    public void validateUpdateWithPredicateGeneration() throws DataStoreException, JSONException {
+    public void validateUpdateWithPredicateGeneration() throws AmplifyException, JSONException {
         String blogOwnerId = "926d7ee8-4ea5-40c0-8e62-3fb80b2a2edd";
         BlogOwner owner = BlogOwner.builder().name("John Doe").id(blogOwnerId).build();
         JSONAssert.assertEquals(
-            Resources.readAsString("update-blog-owner-with-predicate.txt"),
-                AppSyncRequestFactory.buildUpdateRequest(owner, 42, BlogOwner.WEA.contains("ther")).getContent(),
-            true
+                Resources.readAsString("update-blog-owner-with-predicate.txt"),
+                AppSyncRequestFactory.buildUpdateRequest(owner,
+                        ModelSchema.fromModelClass(BlogOwner.class),
+                        42,
+                        BlogOwner.WEA.contains("ther")).getContent(),
+                true
         );
     }
 
     /**
      * Checks that we're getting the expected output for a mutation with predicate.
-     * @throws DataStoreException If the output does not match.
+     * @throws AmplifyException If the output does not match.
      * @throws JSONException from JSONAssert.assertEquals.
      */
     @Test
-    public void validateDeleteWithPredicateGeneration() throws DataStoreException, JSONException {
+    public void validateUpdateNestedCustomTypeWithPredicateGeneration() throws AmplifyException, JSONException {
         JSONAssert.assertEquals(
-            Resources.readAsString("delete-person-with-predicate.txt"),
-            AppSyncRequestFactory.buildDeletionRequest(Person.class, "123", 456, Person.AGE.gt(40)).getContent(),
-            true
+                Resources.readAsString("update-parent-with-predicate.txt"),
+                AppSyncRequestFactory.buildUpdateRequest(
+                        buildTestParentModel(),
+                        ModelSchema.fromModelClass(Parent.class),
+                        42,
+                        Parent.NAME.contains("Jane Doe")
+                ).getContent(),
+                true
+        );
+    }
+
+    /**
+     * Checks that we're getting the expected output for a mutation with predicate.
+     *
+     * @throws AmplifyException If the output does not match.
+     * @throws JSONException    from JSONAssert.assertEquals.
+     */
+    @Test
+    public void validateDeleteWithPredicateGeneration() throws AmplifyException, JSONException {
+        JSONAssert.assertEquals(
+                Resources.readAsString("delete-person-with-predicate.txt"),
+                AppSyncRequestFactory.buildDeletionRequest(ModelSchema.fromModelClass(Person.class),
+                        "123",
+                        456,
+                        Person.AGE.gt(40))
+                        .getContent(),
+                true
         );
     }
 
     /**
      * Checks that the predicate expression matches the expected value.
-     * @throws DataStoreException If the output does not match.
-     * @throws JSONException from JSONAssert.assertEquals.
+     *
+     * @throws AmplifyException If the output does not match.
+     * @throws JSONException    from JSONAssert.assertEquals.
      */
     @Test
-    public void validatePredicateGeneration() throws DataStoreException {
+    public void validatePredicateGeneration() throws AmplifyException {
         Map<String, Object> predicate = AppSyncRequestFactory.parsePredicate(BlogOwner.NAME.eq("Test Dummy"));
         assertEquals(
-            "{name={eq=Test Dummy}}",
-            predicate.toString()
+                "{name={eq=Test Dummy}}",
+                predicate.toString()
         );
 
         predicate = AppSyncRequestFactory.parsePredicate(
-            Blog.NAME.beginsWith("A day in the life of a...").and(Blog.OWNER.eq("DUMMY_OWNER_ID"))
+                Blog.NAME.beginsWith("A day in the life of a...").and(Blog.OWNER.eq("DUMMY_OWNER_ID"))
         );
     }
 
     /**
      * Validates that a GraphQL request document can be created, to get onCreate
      * subscription notifications for a Blog.class.
-     * @throws DataStoreException On failure to interrogate the Blog.class.
+     *
+     * @throws AmplifyException On failure to interrogate the Blog.class.
+     * @throws JSONException    from JSONAssert.assertEquals.
+     */
+    @Test
+    public void validateSubscriptionGenerationOnCreateBlog() throws AmplifyException, JSONException {
+        JSONAssert.assertEquals(
+                Resources.readAsString("on-create-request-for-blog.txt"),
+                AppSyncRequestFactory.buildSubscriptionRequest(ModelSchema.fromModelClass(Blog.class),
+                        SubscriptionType.ON_CREATE).getContent(),
+                true
+        );
+    }
+
+    /**
+     * Validates that a GraphQL request document can be created, to get onCreate for nested custom type
+     * subscription notifications for a Parent.class.
+     * @throws AmplifyException On failure to interrogate the Parent.class.
      * @throws JSONException from JSONAssert.assertEquals.
      */
     @Test
-    public void validateSubscriptionGenerationOnCreateBlog() throws DataStoreException, JSONException {
+    public void validateSubscriptionGenerationOnCreateForNestedCustomType() throws AmplifyException, JSONException {
         JSONAssert.assertEquals(
-            Resources.readAsString("on-create-request-for-blog.txt"),
-            AppSyncRequestFactory.buildSubscriptionRequest(Blog.class, SubscriptionType.ON_CREATE).getContent(),
-            true
+                Resources.readAsString("on-create-request-for-parent.txt"),
+                AppSyncRequestFactory.buildSubscriptionRequest(ModelSchema.fromModelClass(Parent.class),
+                    SubscriptionType.ON_CREATE).getContent(),
+                true
         );
     }
 
     /**
      * Validates generation of a GraphQL document which requests a subscription for updates
-     * to the Blog.class.
-     * @throws DataStoreException On failure to interrogate fields in Blog.class.
-     * @throws JSONException from JSONAssert.assertEquals.
+     * to the Post.class.
+     *
+     * @throws AmplifyException On failure to interrogate fields in Post.class.
+     * @throws JSONException    from JSONAssert.assertEquals.
      */
     @Test
-    public void validateSubscriptionGenerationOnUpdatePost() throws DataStoreException, JSONException {
+    public void validateSubscriptionGenerationOnUpdatePost() throws AmplifyException, JSONException {
         JSONAssert.assertEquals(
-            Resources.readAsString("on-update-request-for-post.txt"),
-            AppSyncRequestFactory.buildSubscriptionRequest(Post.class, SubscriptionType.ON_UPDATE).getContent(),
-            true
+                Resources.readAsString("on-update-request-for-post.txt"),
+                AppSyncRequestFactory.buildSubscriptionRequest(ModelSchema.fromModelClass(Post.class),
+                        SubscriptionType.ON_UPDATE).getContent(),
+                true
         );
     }
 
     /**
-     * Validates generation of a GraphQL document which requests a subscription for updates
+     * Validates generation of a GraphQL document which requests a subscription for deletes.
      * for the BlogOwner.class.
-     * @throws DataStoreException On failure to interrogate the fields in BlogOwner.class.
-     * @throws JSONException from JSONAssert.assertEquals.
+     *
+     * @throws AmplifyException On failure to interrogate the fields in BlogOwner.class.
+     * @throws JSONException    from JSONAssert.assertEquals.
      */
     @Test
-    public void validateSubscriptionGenerationOnDeleteBlogOwner() throws DataStoreException, JSONException {
+    public void validateSubscriptionGenerationOnDeleteBlogOwner() throws AmplifyException, JSONException {
         JSONAssert.assertEquals(
-            Resources.readAsString("on-delete-request-for-blog-owner.txt"),
-            AppSyncRequestFactory.buildSubscriptionRequest(BlogOwner.class, SubscriptionType.ON_DELETE).getContent(),
-            true
+                Resources.readAsString("on-delete-request-for-blog-owner.txt"),
+                AppSyncRequestFactory.buildSubscriptionRequest(ModelSchema.fromModelClass(BlogOwner.class),
+                        SubscriptionType.ON_DELETE).getContent(),
+                true
         );
     }
 
     /**
      * Validates creation of a "create a model" request.
-     * @throws DataStoreException On failure to interrogate the model fields.
-     * @throws JSONException from JSONAssert.assertEquals.
+     *
+     * @throws AmplifyException On failure to interrogate the model fields.
+     * @throws JSONException    from JSONAssert.assertEquals.
      */
     @Test
-    public void validateMutationGenerationOnCreateComment() throws DataStoreException, JSONException {
+    public void validateMutationGenerationOnCreateComment() throws AmplifyException, JSONException {
         Post post = Post.justId("9a4295d6-8225-495a-a531-beffc8b7ae7d");
         Comment comment = Comment.builder()
                 .id("426f8e8d-ea0f-4839-a73f-6a2a38565ba1")
@@ -189,10 +277,58 @@ public final class AppSyncRequestFactoryTest {
                 .post(post)
                 .build();
         JSONAssert.assertEquals(
-            Resources.readAsString("create-comment-request.txt"),
-            AppSyncRequestFactory.buildCreationRequest(comment).getContent(),
-            true
+                Resources.readAsString("create-comment-request.txt"),
+                AppSyncRequestFactory.buildCreationRequest(comment, ModelSchema.fromModelClass(Comment.class))
+                        .getContent(),
+                true
 
         );
+    }
+
+    /**
+     * Validates creation of a "create a model" request for nested custom type.
+     * @throws AmplifyException On failure to interrogate the model fields.
+     * @throws JSONException from JSONAssert.assertEquals.
+     */
+    @Test
+    public void validateMutationGenerationOnCreateNestedCustomType() throws AmplifyException, JSONException {
+        JSONAssert.assertEquals(
+                Resources.readAsString("create-parent-request.txt"),
+                AppSyncRequestFactory.buildCreationRequest(
+                    buildTestParentModel(),
+                    ModelSchema.fromModelClass(Parent.class
+                    )).getContent(),
+                true
+        );
+    }
+
+    private Parent buildTestParentModel() {
+        Address address = Address.builder()
+                .street("555 Five Fiver")
+                .street2("township")
+                .city(City.BO)
+                .phonenumber(
+                        Phonenumber.builder()
+                                .code(232)
+                                .carrier(54)
+                                .number(11111111)
+                                .build()
+                )
+                .country("Sierra Leone")
+                .build();
+        Child child1 = Child.builder()
+                .name("SAM")
+                .address(address)
+                .build();
+        Child child2 = Child.builder()
+                .name("MAS")
+                .address(address)
+                .build();
+        return Parent.builder()
+                .name("Jane Doe")
+                .address(address)
+                .children(Arrays.asList(child1, child2))
+                .id("426f8e8d-ea0f-4839-a73f-6a2a38565ba1")
+                .build();
     }
 }
