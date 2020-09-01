@@ -83,7 +83,7 @@ public final class SubscriptionProcessorTest {
     public void setup() throws AmplifyException {
         ModelProvider modelProvider = AmplifyModelProvider.getInstance();
         modelSchemaRegistry = ModelSchemaRegistry.instance();
-        modelSchemaRegistry.load(modelProvider.modelSchemas());
+        modelSchemaRegistry.register(modelProvider.modelSchemas());
         this.modelSchemas = sortedModels(modelProvider);
         this.appSync = mock(AppSync.class);
         this.merger = mock(Merger.class);

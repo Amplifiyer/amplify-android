@@ -24,9 +24,12 @@ import com.amplifyframework.testmodels.commentsblog.BlogOwner;
 
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+
+import io.reactivex.rxjava3.core.Observable;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -74,9 +77,15 @@ public final class CompoundModelProviderTest {
         SimpleModelProvider twoThreeProvider = SimpleModelProvider.withRandomVersion(BlogOwner.class, Author.class);
         CompoundModelProvider compound = CompoundModelProvider.of(oneTwoProvider, twoThreeProvider);
 
-        assertTrue(compound.modelSchemas().values().contains(ModelSchema.fromModelClass(Blog.class)));
-        assertTrue(compound.modelSchemas().values().contains(ModelSchema.fromModelClass(BlogOwner.class)));
-        assertTrue(compound.modelSchemas().values().contains(ModelSchema.fromModelClass(Author.class)));
+        assertEquals(
+                Observable.fromArray(
+                        ModelSchema.fromModelClass(Author.class),
+                        ModelSchema.fromModelClass(BlogOwner.class),
+                        ModelSchema.fromModelClass(Blog.class))
+                        .toList()
+                        .blockingGet(),
+                new ArrayList<>(compound.modelSchemas().values())
+        );
 
     }
 

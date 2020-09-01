@@ -36,11 +36,11 @@ public final class ModelSchemaRegistry {
     }
 
     /**
-     * Create the ModelSchema objects for all Model classes.
+     * Register the ModelSchema objects for all Model classes.
      * @param models the set that contains all the Model classes.
      * @throws AmplifyException if unable to create a Model Schema for a model
      */
-    public synchronized void load(@NonNull Set<Class<? extends Model>> models) throws AmplifyException {
+    public synchronized void register(@NonNull Set<Class<? extends Model>> models) throws AmplifyException {
         for (Class<? extends Model> modelClass : models) {
             final String modelClassName = modelClass.getSimpleName();
             final ModelSchema modelSchema = ModelSchema.fromModelClass(modelClass);
@@ -49,12 +49,20 @@ public final class ModelSchemaRegistry {
     }
 
     /**
-     * Create the ModelSchema objects for all Model classes.
+     * Registers the modelSchemas provided.
      * @param modelSchemas the map that contains mapping of ModelName to ModelSchema.
-     * @throws AmplifyException if unable to create a Model Schema for a model
      */
-    public synchronized void load(@NonNull Map<String, ModelSchema> modelSchemas) throws AmplifyException {
+    public synchronized void register(@NonNull Map<String, ModelSchema> modelSchemas) {
         modelSchemaMap.putAll(modelSchemas);
+    }
+
+    /**
+     * Registers the modelSchema for the given modelName.
+     * @param modelName name of the model
+     * @param modelSchema schema of the model to be registered.
+     */
+    public synchronized void register(@NonNull String modelName, @NonNull ModelSchema modelSchema) {
+        modelSchemaMap.put(modelName, modelSchema);
     }
 
     /**

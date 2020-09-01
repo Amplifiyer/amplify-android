@@ -86,7 +86,7 @@ final class AppSyncRequestFactory {
 
         try {
             AppSyncGraphQLRequest.Builder builder = AppSyncGraphQLRequest.builder()
-                    .modelClass(modelSchema.getClazz())
+                    .modelClass(modelSchema.getModelClass())
                     .modelSchema(modelSchema)
                     .operation(QueryType.SYNC)
                     .requestOptions(new DataStoreGraphQLRequestOptions())
@@ -94,7 +94,7 @@ final class AppSyncRequestFactory {
                             TypeMaker.getParameterizedType(
                                     PaginatedResult.class,
                                     ModelWithMetadata.class,
-                                    modelSchema.getClazz()));
+                                    modelSchema.getModelClass()));
             if (lastSync != null) {
                 builder.variable("lastSync", "AWSTimestamp", lastSync);
             }
@@ -114,11 +114,11 @@ final class AppSyncRequestFactory {
             SubscriptionType subscriptionType) throws DataStoreException {
         try {
             return AppSyncGraphQLRequest.builder()
-                    .modelClass(modelSchema.getClazz())
+                    .modelClass(modelSchema.getModelClass())
                     .modelSchema(modelSchema)
                     .operation(subscriptionType)
                     .requestOptions(new DataStoreGraphQLRequestOptions())
-                    .responseType(TypeMaker.getParameterizedType(ModelWithMetadata.class, modelSchema.getClazz()))
+                    .responseType(TypeMaker.getParameterizedType(ModelWithMetadata.class, modelSchema.getModelClass()))
                     .build();
         } catch (AmplifyException amplifyException) {
             throw new DataStoreException("Failed to get fields for model.",
@@ -282,11 +282,11 @@ final class AppSyncRequestFactory {
         try {
             String graphQlTypeName = schema.getName();
             AppSyncGraphQLRequest.Builder builder = AppSyncGraphQLRequest.builder()
-                    .modelClass(schema.getClazz())
+                    .modelClass(schema.getModelClass())
                     .modelSchema(schema)
                     .operation(mutationType)
                     .requestOptions(new DataStoreGraphQLRequestOptions())
-                    .responseType(TypeMaker.getParameterizedType(ModelWithMetadata.class, schema.getClazz()));
+                    .responseType(TypeMaker.getParameterizedType(ModelWithMetadata.class, schema.getModelClass()));
 
             String inputType = new StringBuilder()
                     .append(Casing.capitalize(mutationType.toString()))

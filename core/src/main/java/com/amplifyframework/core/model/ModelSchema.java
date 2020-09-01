@@ -71,7 +71,7 @@ public final class ModelSchema {
     private final Map<String, ModelIndex> indexes;
 
     // Class of the model this schema will represent
-    private final Class<? extends Model> clazz;
+    private final Class<? extends Model> modelClass;
 
     // Maintain a sorted copy of all the fields of a Model
     // This is useful so code that uses the sortedFields to generate queries and other
@@ -85,14 +85,14 @@ public final class ModelSchema {
             Map<String, ModelField> fields,
             Map<String, ModelAssociation> associations,
             Map<String, ModelIndex> indexes,
-            Class<? extends Model> clazz) {
+            Class<? extends Model> modelClass) {
         this.name = name;
         this.pluralName = pluralName;
         this.authRules = authRules;
         this.fields = fields;
         this.associations = associations;
         this.indexes = indexes;
-        this.clazz = clazz;
+        this.modelClass = modelClass;
         this.sortedFields = sortModelFields();
     }
 
@@ -307,8 +307,8 @@ public final class ModelSchema {
      * @return the class of {@link Model}.
      */
     @NonNull
-    public Class<? extends Model> getClazz() {
-        return clazz;
+    public Class<? extends Model> getModelClass() {
+        return modelClass;
     }
 
     /**
@@ -478,10 +478,10 @@ public final class ModelSchema {
         private final Map<String, ModelField> fields;
         private final Map<String, ModelAssociation> associations;
         private final Map<String, ModelIndex> indexes;
+        private Class<? extends Model> modelClass;
         private String name;
         private String pluralName;
         private final List<AuthRule> authRules;
-        private Class<? extends Model> clazz;
 
         Builder() {
             this.authRules = new ArrayList<>();
@@ -569,12 +569,12 @@ public final class ModelSchema {
 
         /**
          * The class of the Model this schema represents.
-         * @param clazz the class of the model.
+         * @param modelClass the class of the model.
          * @return the builder object
          */
         @NonNull
-        public Builder modelClass(@NonNull Class<? extends Model> clazz) {
-            this.clazz = clazz;
+        public Builder modelClass(@NonNull Class<? extends Model> modelClass) {
+            this.modelClass = modelClass;
             return this;
         }
 
@@ -593,7 +593,7 @@ public final class ModelSchema {
                 fields,
                 associations,
                 indexes,
-                clazz);
+                    modelClass);
         }
     }
 }

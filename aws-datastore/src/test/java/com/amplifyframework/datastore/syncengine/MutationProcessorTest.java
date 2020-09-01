@@ -68,7 +68,7 @@ public final class MutationProcessorTest {
         Merger merger = new Merger(mutationOutbox, versionRepository, localStorageAdapter);
         this.appSync = mock(AppSync.class);
         this.modelSchemaRegistry = ModelSchemaRegistry.instance();
-        this.modelSchemaRegistry.load(ImmutableSet.of(BlogOwner.class));
+        this.modelSchemaRegistry.register(ImmutableSet.of(BlogOwner.class));
         this.mutationProcessor =
             new MutationProcessor(merger, versionRepository, modelSchemaRegistry, mutationOutbox, appSync);
     }

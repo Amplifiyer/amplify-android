@@ -181,7 +181,7 @@ public final class SQLiteStorageAdapter implements LocalStorageAdapter {
                  * Any exception raised during this when inspecting the Model classes
                  * through reflection will be notified via the `onError` callback.
                  */
-                modelSchemaRegistry.load(modelsProvider.modelSchemas());
+                modelSchemaRegistry.register(modelsProvider.modelSchemas());
 
                 /*
                  * Create the CREATE TABLE and CREATE INDEX commands for each of the

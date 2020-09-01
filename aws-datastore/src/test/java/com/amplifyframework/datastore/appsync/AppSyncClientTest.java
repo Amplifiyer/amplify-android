@@ -94,6 +94,8 @@ public final class AppSyncClientTest {
                     endpoint.sync(request, onResult, onError);
                 } catch (DataStoreException datastoreException) {
                     onError.accept(datastoreException);
+                } catch (AmplifyException amplifyException) {
+                    // Todo failed converting Model Class to ModelSchema
                 }
             }
         );

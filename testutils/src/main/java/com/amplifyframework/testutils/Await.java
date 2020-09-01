@@ -17,7 +17,6 @@ package com.amplifyframework.testutils;
 
 import androidx.annotation.NonNull;
 
-import com.amplifyframework.AmplifyException;
 import com.amplifyframework.core.Consumer;
 
 import java.util.Objects;
@@ -181,9 +180,8 @@ public final class Await {
          * result or as an error.
          * @param onResult Callback invoked upon emission of result
          * @param onError Callback invoked upon emission of error
-         * @throws AmplifyException while converting model class to schema
          */
-        void emitTo(@NonNull Consumer<R> onResult, @NonNull Consumer<E> onError) throws AmplifyException;
+        void emitTo(@NonNull Consumer<R> onResult, @NonNull Consumer<E> onError);
     }
 }
 
