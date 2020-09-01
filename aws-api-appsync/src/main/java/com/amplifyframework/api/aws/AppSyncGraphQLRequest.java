@@ -84,13 +84,12 @@ public final class AppSyncGraphQLRequest<R> extends GraphQLRequest<R> {
 
     /**
      *  Returns String value used for GraphQL "query" in HTTP request body.
-     *
      *  Sample return value:
      *      subscription OnCreatePerson(owner: String!, nextToken: String) {
-     *            onCreatePerson(owner: $owner, nextToken: $nextToken) {
-     *               age dob first_name id last_name relationship owner
-     *            }
-     *       }
+     *          onCreatePerson(owner: $owner, nextToken: $nextToken) {
+     *              age dob first_name id last_name relationship owner
+     *          }
+     *      }
      *
      * @return String value used for GraphQL "query" in HTTP request body
      */
@@ -294,7 +293,6 @@ public final class AppSyncGraphQLRequest<R> extends GraphQLRequest<R> {
 
         /**
          * Builds an {@link AppSyncGraphQLRequest}.
-         *
          * @param <R> The type of data contained in the GraphQLResponse expected from this request.
          * @return the AppSyncGraphQLRequest
          * @throws AmplifyException if a ModelSchema cannot be created from the provided model class.
@@ -307,25 +305,19 @@ public final class AppSyncGraphQLRequest<R> extends GraphQLRequest<R> {
                 throw new AmplifyException("Both modelSchema and modelClass cannot be null", "");
             }
 
-            if (modelClass != null && modelSchema == null) {
+            if (modelSchema == null) {
                 // Derive modelSchema from modelClass if not available
                 modelSchema = ModelSchema.fromModelClass(this.modelClass);
+            }
+            // if this Builder was created via newBuilder(),
+            // selectionSet will already be set, so we can continue on.
+            if (selectionSet == null) {
                 selectionSet = SelectionSet.builder()
+                        .modelSchema(this.modelSchema)
                         .modelClass(this.modelClass)
                         .operation(this.operation)
                         .requestOptions(Objects.requireNonNull(this.requestOptions))
                         .build();
-            } else {
-                // ModelSchema provided to builder is non-null. Let's use it to build selection set
-                // else if this Builder was created via newBuilder(),
-                // selectionSet will already be set, so we can continue on.
-                if (selectionSet == null) {
-                    selectionSet = SelectionSet.builder()
-                            .modelSchema(this.modelSchema)
-                            .operation(this.operation)
-                            .requestOptions(Objects.requireNonNull(this.requestOptions))
-                            .build();
-                }
             }
             return new AppSyncGraphQLRequest<>(this);
         }

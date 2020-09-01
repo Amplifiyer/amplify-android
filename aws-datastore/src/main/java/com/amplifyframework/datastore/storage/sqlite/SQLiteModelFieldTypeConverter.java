@@ -92,6 +92,7 @@ public final class SQLiteModelFieldTypeConverter implements ModelFieldTypeConver
             case LONG:
             case FLOAT:
             case STRING:
+            case TIMESTAMP:
                 // these types require no special treatment
                 return value;
             case BOOLEAN:
@@ -159,6 +160,7 @@ public final class SQLiteModelFieldTypeConverter implements ModelFieldTypeConver
                 case FLOAT:
                     return cursor.getFloat(columnIndex);
                 case LONG:
+                case TIMESTAMP:
                     return cursor.getLong(columnIndex);
                 case DATE:
                     return new Temporal.Date(valueAsString);

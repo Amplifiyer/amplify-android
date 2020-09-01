@@ -65,7 +65,6 @@ public final class AppSyncClientInstrumentationTest {
 
     /**
      * Configure Amplify for API tests, if it has not been configured, yet.
-     *
      * @throws AmplifyException From Amplify configuration
      */
     @BeforeClass
@@ -84,7 +83,6 @@ public final class AppSyncClientInstrumentationTest {
 
     /**
      * Tests the operations in AppSyncClient.
-     *
      * @throws AmplifyException If any call to AppSync endpoint fails to return a response
      */
     @Test
@@ -219,10 +217,9 @@ public final class AppSyncClientInstrumentationTest {
     /**
      * Create a model via the App Sync API, and return the App Sync API's
      * understood version of that model, along with server's metadata for the model.
-     *
-     * @param model  Model to create in remote App Sync API
+     * @param model Model to create in remote App Sync API
      * @param schema The schema of the model
-     * @param <T>    Type of model being created
+     * @param <T> Type of model being created
      * @return Endpoint's version of the model, along with metadata about the model
      * @throws DataStoreException If API create call fails to render any response from AppSync endpoint
      */
@@ -235,11 +232,10 @@ public final class AppSyncClientInstrumentationTest {
 
     /**
      * Updates an existing item in the App Sync API, whose remote version is the expected value.
-     *
-     * @param model   Updated model, to persist remotely
-     * @param schema  The schema of the model
+     * @param model Updated model, to persist remotely
+     * @param schema The schema of the model
      * @param version Current version of the model that we (the client) know about
-     * @param <T>     The type of model being updated
+     * @param <T> The type of model being updated
      * @return Server's version of the model after update, along with new metadata
      * @throws DataStoreException If API update call fails to render any response from AppSync endpoint
      */
@@ -259,11 +255,10 @@ public final class AppSyncClientInstrumentationTest {
 
     /**
      * Deletes an instance of a model.
-     *
-     * @param schema  The schema of the model
+     * @param schema The schema of the model
      * @param modelId The ID of the model instance to delete
      * @param version The version of the model being deleted as understood by client
-     * @param <T>     Type of model being deleted
+     * @param <T> Type of model being deleted
      * @return Model hat was deleted from endpoint, coupled with metadata about the deletion
      * @throws DataStoreException If API delete call fails to render any response from AppSync endpoint
      */
@@ -285,11 +280,10 @@ public final class AppSyncClientInstrumentationTest {
     /**
      * Try to delete an item, but expect it to error.
      * Return the errors that were contained in the GraphQLResponse returned from endpoint.
-     *
-     * @param schema  The schema of the model
+     * @param schema The schema of the model
      * @param modelId ID of item for which delete is attempted
      * @param version Version of item for which deleted is attempted
-     * @param <T>     Type of item for which delete is attempted
+     * @param <T> Type of item for which delete is attempted
      * @return List of GraphQLResponse.Error which explain why delete failed
      * @throws DataStoreException If API delete call fails to render any response from AppSync endpoint
      */
@@ -312,7 +306,7 @@ public final class AppSyncClientInstrumentationTest {
     private <T extends Model> PaginatedResult<ModelWithMetadata<T>> sync(
             GraphQLRequest<PaginatedResult<ModelWithMetadata<T>>> request) throws DataStoreException {
         return awaitResponseData((onResult, onError) ->
-            api.sync(request, onResult, onError));
+                api.sync(request, onResult, onError));
     }
 
     private <T> T awaitResponseData(
