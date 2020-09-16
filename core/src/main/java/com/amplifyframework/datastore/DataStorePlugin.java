@@ -20,7 +20,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.WorkerThread;
 
 import com.amplifyframework.AmplifyException;
+import com.amplifyframework.core.Action;
 import com.amplifyframework.core.Consumer;
+import com.amplifyframework.core.async.Cancelable;
 import com.amplifyframework.core.category.CategoryType;
 import com.amplifyframework.core.model.Model;
 import com.amplifyframework.core.plugin.Plugin;
@@ -55,5 +57,23 @@ public abstract class DataStorePlugin<E> implements DataStoreCategoryBehavior, P
             @NonNull String modelName,
             @NonNull Consumer<Iterator<? extends Model>> onQueryResults,
             @NonNull Consumer<DataStoreException> onQueryFailure) {
+    }
+
+    /**
+     * Observe changes to a certain type of item(s) in the DataStore.
+     * @param modelName The name of the model to observe
+     * @param onObservationStarted Called when observation begins
+     * @param onDataStoreItemChange Called 0..n times, whenever there is a change to an
+     *                              item of the requested class
+     * @param onObservationFailure Called if observation of the DataStore terminates
+     *                             with a non-recoverable failure
+     * @param onObservationCompleted Called when observation completes gracefully
+     */
+    public void observe(
+            @NonNull String modelName,
+            @NonNull Consumer<Cancelable> onObservationStarted,
+            @NonNull Consumer<DataStoreItemChange<? extends Model>> onDataStoreItemChange,
+            @NonNull Consumer<DataStoreException> onObservationFailure,
+            @NonNull Action onObservationCompleted) {
     }
 }
