@@ -135,9 +135,8 @@ public final class AppSyncMocking {
          * @param model When this model is received, mock is enacted. This model is passed back in response.
          * @param <T> Type of model
          * @return A create configurator
-         * @throws AmplifyException when modelClass cannot be converted to modelSchema
          */
-        public <T extends Model> CreateConfigurator mockResponse(T model) throws AmplifyException {
+        public <T extends Model> CreateConfigurator mockResponse(T model) {
             doAnswer(invocation -> {
                 // Simulate a successful response callback from the create() method.
                 final int indexOfModelBeingCreated = 0;

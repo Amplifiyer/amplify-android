@@ -86,20 +86,6 @@ public final class AppSyncRequestFactoryTest {
     }
 
     /**
-     * Validates the construction of a base-sync query document for models with custom types.
-     * @throws DataStoreException On failure to interrogate fields in Parent.class
-     * @throws JSONException from JSONAssert.assertEquals
-     */
-    @Test
-    public void validateCustomTypeRequestGenerationForBaseSync() throws DataStoreException, JSONException {
-        JSONAssert.assertEquals(
-                Resources.readAsString("base-sync-request-document-for-parent.txt"),
-                AppSyncRequestFactory.buildSyncRequest(Parent.class, null, null).getContent(),
-                true
-        );
-    }
-
-    /**
      * Validates the construction of a delta-sync query document.
      *
      * @throws AmplifyException On failure to interrogate fields in Blog.class.
@@ -173,24 +159,6 @@ public final class AppSyncRequestFactoryTest {
 
     /**
      * Checks that we're getting the expected output for a mutation with predicate.
-     * @throws DataStoreException If the output does not match.
-     * @throws JSONException from JSONAssert.assertEquals.
-     */
-    @Test
-    public void validateUpdateNestedCustomTypeWithPredicateGeneration() throws DataStoreException, JSONException {
-        JSONAssert.assertEquals(
-                Resources.readAsString("update-parent-with-predicate.txt"),
-                AppSyncRequestFactory.buildUpdateRequest(
-                        buildTestParentModel(),
-                        42,
-                        Parent.NAME.contains("Jane Doe")
-                ).getContent(),
-                true
-        );
-    }
-
-    /**
-     * Checks that we're getting the expected output for a mutation with predicate.
      *
      * @throws AmplifyException If the output does not match.
      * @throws JSONException    from JSONAssert.assertEquals.
@@ -240,21 +208,6 @@ public final class AppSyncRequestFactoryTest {
                 Resources.readAsString("on-create-request-for-blog.txt"),
                 AppSyncRequestFactory.buildSubscriptionRequest(ModelSchema.fromModelClass(Blog.class),
                         SubscriptionType.ON_CREATE).getContent(),
-                true
-        );
-    }
-
-    /**
-     * Validates that a GraphQL request document can be created, to get onCreate for nested custom type
-     * subscription notifications for a Parent.class.
-     * @throws DataStoreException On failure to interrogate the Blog.class.
-     * @throws JSONException from JSONAssert.assertEquals.
-     */
-    @Test
-    public void validateSubscriptionGenerationOnCreateForNestedCustomType() throws DataStoreException, JSONException {
-        JSONAssert.assertEquals(
-                Resources.readAsString("on-create-request-for-parent.txt"),
-                AppSyncRequestFactory.buildSubscriptionRequest(Parent.class, SubscriptionType.ON_CREATE).getContent(),
                 true
         );
     }

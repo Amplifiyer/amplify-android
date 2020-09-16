@@ -432,22 +432,22 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
             @NonNull Consumer<DataStoreException> onObservationFailure,
             @NonNull Action onObservationCompleted) {
         beforeOperation(() -> onObservationStarted.accept(sqliteStorageAdapter.observe(
-                itemChange -> {
-                    try {
-                        if (itemChange.itemClass().equals(SerializedModel.class)) {
-                            if (((SerializedModel) itemChange.item()).getModelName().equals(modelName)) {
-                                @SuppressWarnings("unchecked") // This was just checked, right above.
-                                StorageItemChange<SerializedModel> typedChange =
-                                        (StorageItemChange<SerializedModel>) itemChange;
-                                onDataStoreItemChange.accept(toDataStoreItemChange(typedChange));
-                            }
+            itemChange -> {
+                try {
+                    if (itemChange.itemClass().equals(SerializedModel.class)) {
+                        if (((SerializedModel) itemChange.item()).getModelName().equals(modelName)) {
+                            @SuppressWarnings("unchecked") // This was just checked, right above.
+                            StorageItemChange<SerializedModel> typedChange =
+                                    (StorageItemChange<SerializedModel>) itemChange;
+                            onDataStoreItemChange.accept(toDataStoreItemChange(typedChange));
                         }
-                    } catch (DataStoreException dataStoreException) {
-                        onObservationFailure.accept(dataStoreException);
                     }
-                },
-                onObservationFailure,
-                onObservationCompleted
+                } catch (DataStoreException dataStoreException) {
+                    onObservationFailure.accept(dataStoreException);
+                }
+            },
+            onObservationFailure,
+            onObservationCompleted
         )));
     }
 
