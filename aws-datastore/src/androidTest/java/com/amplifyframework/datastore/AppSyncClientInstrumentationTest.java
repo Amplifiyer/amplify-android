@@ -33,6 +33,7 @@ import com.amplifyframework.core.model.Model;
 import com.amplifyframework.core.model.ModelSchema;
 import com.amplifyframework.core.model.query.predicate.QueryPredicate;
 import com.amplifyframework.core.model.query.predicate.QueryPredicates;
+import com.amplifyframework.core.model.temporal.Temporal;
 import com.amplifyframework.datastore.appsync.AppSync;
 import com.amplifyframework.datastore.appsync.AppSyncClient;
 import com.amplifyframework.datastore.appsync.ModelWithMetadata;
@@ -48,6 +49,7 @@ import org.junit.Test;
 
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import io.reactivex.rxjava3.core.Observable;
 
@@ -88,7 +90,7 @@ public final class AppSyncClientInstrumentationTest {
     @Test
     @SuppressWarnings("MethodLength")
     public void testAllOperations() throws AmplifyException {
-        Long startTime = new Date().getTime();
+        Long startTimeSeconds = TimeUnit.MILLISECONDS.toSeconds(new Date().getTime());
 
         // Schema of test models
         ModelSchema blogSchema = ModelSchema.fromModelClass(Blog.class);
@@ -124,9 +126,9 @@ public final class AppSyncClientInstrumentationTest {
         assertEquals(blog.getOwner().getId(), blogCreateResult.getModel().getOwner().getId());
         assertEquals(new Integer(1), blogCreateResult.getSyncMetadata().getVersion());
         assertNull(blogCreateResult.getSyncMetadata().isDeleted());
-        Long createdBlogLastChangedAt = blogCreateResult.getSyncMetadata().getLastChangedAt();
+        Temporal.Timestamp createdBlogLastChangedAt = blogCreateResult.getSyncMetadata().getLastChangedAt();
         assertNotNull(createdBlogLastChangedAt);
-        assertTrue(createdBlogLastChangedAt > startTime);
+        assertTrue(createdBlogLastChangedAt.getSecondsSinceEpoch() > startTimeSeconds);
         assertEquals(blog.getId(), blogCreateResult.getSyncMetadata().getId());
 
         // TODO: Subscriptions are currently failing.  More investigation required to fix this part of the test.
@@ -169,9 +171,9 @@ public final class AppSyncClientInstrumentationTest {
 
         // Update model
         Blog updatedBlog = blog.copyOfBuilder()
-                .name("Updated blog")
-                .build();
-        Long updateBlogStartTime = new Date().getTime();
+            .name("Updated blog")
+            .build();
+        Long updateBlogStartTimeSeconds = TimeUnit.MILLISECONDS.toSeconds(new Date().getTime());
 
         ModelWithMetadata<Blog> blogUpdateResult = update(updatedBlog, blogSchema, 1);
 
@@ -181,9 +183,9 @@ public final class AppSyncClientInstrumentationTest {
         assertEquals(2, blogUpdateResult.getModel().getPosts().size());
         assertEquals(new Integer(2), blogUpdateResult.getSyncMetadata().getVersion());
         assertNull(blogUpdateResult.getSyncMetadata().isDeleted());
-        Long updatedBlogLastChangedAt = blogUpdateResult.getSyncMetadata().getLastChangedAt();
+        Temporal.Timestamp updatedBlogLastChangedAt = blogUpdateResult.getSyncMetadata().getLastChangedAt();
         assertNotNull(updatedBlogLastChangedAt);
-        assertTrue(updatedBlogLastChangedAt > updateBlogStartTime);
+        assertTrue(updatedBlogLastChangedAt.getSecondsSinceEpoch() > updateBlogStartTimeSeconds);
 
         // Delete one of the posts
         ModelWithMetadata<Post> post1DeleteResult = delete(postSchema, post1.getId(), 1);
@@ -210,7 +212,8 @@ public final class AppSyncClientInstrumentationTest {
         // TODO: This is currently a pretty worthless test - mainly for setting a debug point and manually inspecting
         // When you call sync with a lastSyncTime it gives you one entry per version of that object which was created
         // since that time.
-        Iterable<ModelWithMetadata<Post>> postSyncResult = sync(api.buildSyncRequest(postSchema, startTime, 1000));
+        Iterable<ModelWithMetadata<Post>> postSyncResult =
+                sync(api.buildSyncRequest(postSchema, startTimeSeconds, 1000));
         assertTrue(postSyncResult.iterator().hasNext());
     }
 
@@ -312,7 +315,7 @@ public final class AppSyncClientInstrumentationTest {
     private <T> T awaitResponseData(
             Await.ResultErrorEmitter<GraphQLResponse<T>, DataStoreException> resultErrorEmitter)
             throws DataStoreException {
-        final GraphQLResponse<T> response = Await.result(resultErrorEmitter);
+        final GraphQLResponse<T> response = Await.result(TimeUnit.SECONDS.toMillis(20), resultErrorEmitter);
         if (response.hasErrors()) {
             String firstErrorMessage = response.getErrors().get(0).getMessage();
             throw new DataStoreException("Response contained errors: " + firstErrorMessage, "Check request.");

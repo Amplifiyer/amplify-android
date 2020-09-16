@@ -32,8 +32,6 @@ import com.amplifyframework.api.events.ApiEndpointStatusChangeEvent.ApiEndpointS
 import com.amplifyframework.api.graphql.GraphQLOperation;
 import com.amplifyframework.api.graphql.GraphQLRequest;
 import com.amplifyframework.api.graphql.GraphQLResponse;
-import com.amplifyframework.api.graphql.Operation;
-import com.amplifyframework.api.graphql.SubscriptionType;
 import com.amplifyframework.api.rest.HttpMethod;
 import com.amplifyframework.api.rest.RestOperation;
 import com.amplifyframework.api.rest.RestOperationRequest;
@@ -48,6 +46,8 @@ import com.amplifyframework.core.model.ModelOperation;
 import com.amplifyframework.hub.HubChannel;
 import com.amplifyframework.util.UserAgent;
 
+import com.amazonaws.mobileconnectors.cognitoidentityprovider.util.CognitoJWTParser;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -56,7 +56,6 @@ import java.net.Proxy;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -288,7 +287,7 @@ public final class AWSApiPlugin extends ApiPlugin<Map<String, OkHttpClient>> {
             try {
                 AppSyncGraphQLRequest<R> appSyncRequest = (AppSyncGraphQLRequest<R>) request;
                 for (AuthRule authRule : appSyncRequest.getModelSchema().getAuthRules()) {
-                    if (isOwnerArgumentRequired(authRule, appSyncRequest.getOperation())) {
+                    if (isOwnerArgumentRequired(authRule)) {
                         request = appSyncRequest.newBuilder()
                                 .variable(authRule.getOwnerFieldOrDefault(), "String!", getUsername())
                                 .build();
@@ -315,21 +314,9 @@ public final class AWSApiPlugin extends ApiPlugin<Map<String, OkHttpClient>> {
         return operation;
     }
 
-    private boolean isOwnerArgumentRequired(AuthRule authRule, Operation operation) {
-        if (!AuthStrategy.OWNER.equals(authRule.getAuthStrategy())) {
-            return false;
-        }
-        List<ModelOperation> operations = authRule.getOperationsOrDefault();
-        if (SubscriptionType.ON_CREATE.equals(operation) && operations.contains(ModelOperation.CREATE)) {
-            return true;
-        }
-        if (SubscriptionType.ON_UPDATE.equals(operation) && operations.contains(ModelOperation.UPDATE)) {
-            return true;
-        }
-        if (SubscriptionType.ON_DELETE.equals(operation) && operations.contains(ModelOperation.DELETE)) {
-            return true;
-        }
-        return false;
+    private boolean isOwnerArgumentRequired(AuthRule authRule) {
+        return AuthStrategy.OWNER.equals(authRule.getAuthStrategy())
+            && authRule.getOperationsOrDefault().contains(ModelOperation.READ);
     }
 
     private String getUsername() throws ApiException {
@@ -344,13 +331,27 @@ public final class AWSApiPlugin extends ApiPlugin<Map<String, OkHttpClient>> {
                 );
             }
         }
-        String username = cognitoProvider.getUsername();
-        if (username == null) {
+
+        String username;
+
+        // Grabs username value from the access token directly since this can differ from the colloquial username
+        // returned by the getUsername method (e.g. email/phone based sign in return the email/phone number in
+        // getUsername but the access token holds the user id in the username field which is what AppSync checks).
+        try {
+            username = CognitoJWTParser
+                    .getPayload(cognitoProvider.getLatestAuthToken())
+                    .getString("username");
+        } catch (JSONException error) {
+            username = null;
+        }
+
+        if (username == null || username.isEmpty()) {
             throw new ApiException(
                     "Attempted to subscribe to a model with owner based authorization without a username",
                     "Make sure that a user is logged in before subscribing to a model with owner based auth"
             );
         }
+
         return username;
     }
 
