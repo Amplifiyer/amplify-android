@@ -54,7 +54,7 @@ import io.reactivex.rxjava3.processors.BehaviorProcessor;
  * "Hydrates" the local DataStore, using model metadata receive from the
  * {@link AppSync#sync(GraphQLRequest, Consumer, Consumer)}.
  * Hydration refers to populating the local storage with values from a remote system.
- *
+ * <p>
  * For all items returned by the sync, merge them back into local storage through
  * the {@link Merger}.
  */
@@ -82,7 +82,9 @@ final class SyncProcessor {
         this.appSync = Objects.requireNonNull(appSync);
         this.merger = Objects.requireNonNull(merger);
         this.dataStoreConfigurationProvider = dataStoreConfigurationProvider;
-        this.modelNames = ForEach.inCollection(modelProvider.models(), Class::getSimpleName).toArray(new String[0]);
+        this.modelNames =
+                ForEach.inCollection(modelProvider.modelSchemas().values(), ModelSchema::getName)
+                        .toArray(new String[0]);
     }
 
     /**
@@ -103,69 +105,68 @@ final class SyncProcessor {
                 new ModelClassComparator(modelProvider, modelSchemaRegistry);
 
         final List<Completable> hydrationTasks = new ArrayList<>();
-        List<Class<? extends Model>> modelClsList =
-            new ArrayList<Class<? extends Model>>(modelProvider.models());
+        List<ModelSchema> modelSchemas = new ArrayList<>(modelProvider.modelSchemas().values());
 
         // And sort them all, according to their model's topological order,
         // So that when we save them, the references will exist.
-        Collections.sort(modelClsList, modelClassComparator::compare);
-        for (Class<? extends Model> clazz : modelClsList) {
-            hydrationTasks.add(createHydrationTask(clazz));
+        Collections.sort(modelSchemas, modelClassComparator::compareSchema);
+        for (ModelSchema schema : modelSchemas) {
+            hydrationTasks.add(createHydrationTask(schema));
         }
 
         return Completable.concat(hydrationTasks)
-            .doOnSubscribe(ignore -> {
-                // This is where we trigger the syncQueriesStarted event since
-                // doOnSubscribe means that all upstream hydration tasks
-                // have started.
-                Amplify.Hub.publish(HubChannel.DATASTORE,
-                    HubEvent.create(DataStoreChannelEventName.SYNC_QUERIES_STARTED,
-                        new SyncQueriesStartedEvent(modelNames)
-                    )
-                );
-            })
-            .doOnComplete(() -> {
-                // When the Completable completes, then emit syncQueriesReady.
-                Amplify.Hub.publish(HubChannel.DATASTORE,
-                    HubEvent.create(DataStoreChannelEventName.SYNC_QUERIES_READY));
-            });
+                .doOnSubscribe(ignore -> {
+                    // This is where we trigger the syncQueriesStarted event since
+                    // doOnSubscribe means that all upstream hydration tasks
+                    // have started.
+                    Amplify.Hub.publish(HubChannel.DATASTORE,
+                            HubEvent.create(DataStoreChannelEventName.SYNC_QUERIES_STARTED,
+                                    new SyncQueriesStartedEvent(modelNames)
+                            )
+                    );
+                })
+                .doOnComplete(() -> {
+                    // When the Completable completes, then emit syncQueriesReady.
+                    Amplify.Hub.publish(HubChannel.DATASTORE,
+                            HubEvent.create(DataStoreChannelEventName.SYNC_QUERIES_READY));
+                });
     }
 
-    private Completable createHydrationTask(Class<? extends Model> modelClass) {
-        ModelSyncMetricsAccumulator metricsAccumulator = new ModelSyncMetricsAccumulator(modelClass);
-        return syncTimeRegistry.lookupLastSyncTime(modelClass)
-            .map(this::filterOutOldSyncTimes)
-            // And for each, perform a sync. The network response will contain an Iterable<ModelWithMetadata<T>>
-            .flatMap(lastSyncTime -> {
-                // Sync all the pages
-                return syncModel(modelClass, lastSyncTime)
-                    // For each ModelWithMetadata, merge it into the local store.
-                    .flatMapCompletable(modelWithMetadata ->
-                        merger.merge(modelWithMetadata, metricsAccumulator::increment)
-                    )
-                    .toSingle(() -> lastSyncTime.exists() ? SyncType.DELTA : SyncType.BASE);
-            })
-            .flatMapCompletable(syncType -> {
-                Completable syncTimeSaveCompletable = SyncType.DELTA.equals(syncType) ?
-                    syncTimeRegistry.saveLastDeltaSyncTime(modelClass, SyncTime.now()) :
-                    syncTimeRegistry.saveLastBaseSyncTime(modelClass, SyncTime.now());
-                return syncTimeSaveCompletable.andThen(Completable.fromAction(() -> {
-                    Amplify.Hub.publish(HubChannel.DATASTORE,
-                                        metricsAccumulator.toModelSyncedEvent(syncType).toHubEvent());
-                }));
-            })
-            .doOnError(failureToSync -> {
-                LOG.warn("Initial cloud sync failed.", failureToSync);
-                DataStoreErrorHandler dataStoreErrorHandler =
-                    dataStoreConfigurationProvider.getConfiguration().getDataStoreErrorHandler();
-                dataStoreErrorHandler.accept(new DataStoreException(
-                    "Initial cloud sync failed.", failureToSync,
-                    "Check your internet connection."
-                ));
-            })
-            .doOnComplete(() ->
-                LOG.info("Successfully sync'd down model state from cloud.")
-            );
+    private Completable createHydrationTask(ModelSchema schema) {
+        ModelSyncMetricsAccumulator metricsAccumulator = new ModelSyncMetricsAccumulator(schema.getName());
+        return syncTimeRegistry.lookupLastSyncTime(schema.getName())
+                .map(this::filterOutOldSyncTimes)
+                // And for each, perform a sync. The network response will contain an Iterable<ModelWithMetadata<T>>
+                .flatMap(lastSyncTime -> {
+                    // Sync all the pages
+                    return syncModel(schema, lastSyncTime)
+                            // For each ModelWithMetadata, merge it into the local store.
+                            .flatMapCompletable(modelWithMetadata ->
+                                    merger.merge(modelWithMetadata, metricsAccumulator::increment)
+                            )
+                            .toSingle(() -> lastSyncTime.exists() ? SyncType.DELTA : SyncType.BASE);
+                })
+                .flatMapCompletable(syncType -> {
+                    Completable syncTimeSaveCompletable = SyncType.DELTA.equals(syncType) ?
+                            syncTimeRegistry.saveLastDeltaSyncTime(schema.getName(), SyncTime.now()) :
+                            syncTimeRegistry.saveLastBaseSyncTime(schema.getName(), SyncTime.now());
+                    return syncTimeSaveCompletable.andThen(Completable.fromAction(() -> {
+                        Amplify.Hub.publish(HubChannel.DATASTORE,
+                                metricsAccumulator.toModelSyncedEvent(syncType).toHubEvent());
+                    }));
+                })
+                .doOnError(failureToSync -> {
+                    LOG.warn("Initial cloud sync failed.", failureToSync);
+                    DataStoreErrorHandler dataStoreErrorHandler =
+                            dataStoreConfigurationProvider.getConfiguration().getDataStoreErrorHandler();
+                    dataStoreErrorHandler.accept(new DataStoreException(
+                            "Initial cloud sync failed.", failureToSync,
+                            "Check your internet connection."
+                    ));
+                })
+                .doOnComplete(() ->
+                        LOG.info("Successfully sync'd down model state from cloud.")
+                );
     }
 
     /**
@@ -182,7 +183,7 @@ final class SyncProcessor {
 
         // "If (now - last sync time) is within the base sync interval"
         if (Time.now() - lastSyncTime.toLong() <=
-            dataStoreConfigurationProvider.getConfiguration().getSyncIntervalMs()) {
+                dataStoreConfigurationProvider.getConfiguration().getSyncIntervalMs()) {
             // Pass through the last sync time, so that it can be used to compute delta sync.
             return lastSyncTime;
         }
@@ -195,26 +196,25 @@ final class SyncProcessor {
     /**
      * Sync models for a given model class.
      * This involves three steps:
-     *  1. Lookup the last time the model class was synced;
-     *  2. Make a request to the AppSync endpoint. If the last sync time is within a recent window
-     *     of time, then request a *delta* sync. If the last sync time is outside a recent window of time,
-     *     perform a *base* sync. A base sync is preformed by passing null.
-     *  3. Continue fetching paged results until !hasNextResult() or we have synced the max records.
-     *
-     * @param modelClass The model class to sync
+     * 1. Lookup the last time the model class was synced;
+     * 2. Make a request to the AppSync endpoint. If the last sync time is within a recent window
+     * of time, then request a *delta* sync. If the last sync time is outside a recent window of time,
+     * perform a *base* sync. A base sync is preformed by passing null.
+     * 3. Continue fetching paged results until !hasNextResult() or we have synced the max records.
+     * @param schema The schema of the model to sync
      * @param syncTime The time of a last successful sync.
      * @param <T> The type of model to sync.
      * @return a stream of all ModelWithMetadata&lt;T&gt; objects from all pages for the provided model.
      * @throws DataStoreException if dataStoreConfigurationProvider.getConfiguration() fails
      */
-    private <T extends Model> Flowable<ModelWithMetadata<T>> syncModel(Class<T> modelClass, SyncTime syncTime)
+    private <T extends Model> Flowable<ModelWithMetadata<T>> syncModel(ModelSchema schema, SyncTime syncTime)
             throws DataStoreException {
         final Long lastSyncTimeAsLong = syncTime.exists() ? syncTime.toLong() : null;
         final Integer syncPageSize = dataStoreConfigurationProvider.getConfiguration().getSyncPageSize();
 
         // Create a BehaviorProcessor, and set the default value to a GraphQLRequest that fetches the first page.
         BehaviorProcessor<GraphQLRequest<PaginatedResult<ModelWithMetadata<T>>>> processor =
-                BehaviorProcessor.createDefault(appSync.buildSyncRequest(modelClass, lastSyncTimeAsLong, syncPageSize));
+                BehaviorProcessor.createDefault(appSync.buildSyncRequest(schema, lastSyncTimeAsLong, syncPageSize));
 
         return processor.concatMap(request -> syncPage(request).toFlowable())
                 .doOnNext(paginatedResult -> {
@@ -233,7 +233,7 @@ final class SyncProcessor {
     /**
      * Fetches one page for a sync.
      * @param request GraphQLRequest object for the sync, obtained from {@link AppSync#buildSyncRequest}, or from
-     *                response.getData().getRequestForNextResult() for subsequent requests.
+     * response.getData().getRequestForNextResult() for subsequent requests.
      * @param <T> The type of model to sync.
      */
     private <T extends Model> Single<PaginatedResult<ModelWithMetadata<T>>> syncPage(
@@ -307,7 +307,7 @@ final class SyncProcessor {
         @NonNull
         @Override
         public BuildStep dataStoreConfigurationProvider(
-            DataStoreConfigurationProvider dataStoreConfigurationProvider) {
+                DataStoreConfigurationProvider dataStoreConfigurationProvider) {
             this.dataStoreConfigurationProvider = dataStoreConfigurationProvider;
             return Builder.this;
         }
@@ -316,12 +316,12 @@ final class SyncProcessor {
         @Override
         public SyncProcessor build() {
             return new SyncProcessor(
-                modelProvider,
-                modelSchemaRegistry,
-                syncTimeRegistry,
-                appSync,
-                merger,
-                dataStoreConfigurationProvider
+                    modelProvider,
+                    modelSchemaRegistry,
+                    syncTimeRegistry,
+                    appSync,
+                    merger,
+                    dataStoreConfigurationProvider
             );
         }
     }
@@ -376,19 +376,9 @@ final class SyncProcessor {
                     TopologicalOrdering.forRegisteredModels(modelSchemaRegistry, modelProvider);
         }
 
-        private <M extends Class<? extends Model>> int compare(M left, M right) {
-            return topologicalOrdering.compare(schemaFor(left), schemaFor(right));
+        private int compareSchema(ModelSchema left, ModelSchema right) {
+            return topologicalOrdering.compare(left, right);
         }
 
-        /**
-         * Gets the model schema for a model.
-         * @param modelCls A model with metadata about it
-         * @param <M> Type for ModelWithMetadata containing arbitrary model instances
-         * @return Model Schema for model
-         */
-        @NonNull
-        private <M extends Class<? extends Model>> ModelSchema schemaFor(M modelCls) {
-            return modelSchemaRegistry.getModelSchemaForModelClass(modelCls.getSimpleName());
-        }
     }
 }

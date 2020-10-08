@@ -21,10 +21,13 @@ import com.amplifyframework.api.graphql.GraphQLResponse;
 import com.amplifyframework.core.Amplify;
 import com.amplifyframework.core.Consumer;
 import com.amplifyframework.core.model.Model;
+import com.amplifyframework.core.model.ModelSchema;
+import com.amplifyframework.core.model.ModelSchemaRegistry;
 import com.amplifyframework.datastore.DataStoreChannelEventName;
 import com.amplifyframework.datastore.DataStoreException;
 import com.amplifyframework.datastore.appsync.AppSync;
 import com.amplifyframework.datastore.appsync.ModelWithMetadata;
+import com.amplifyframework.datastore.appsync.SerializedModel;
 import com.amplifyframework.datastore.events.OutboxStatusEvent;
 import com.amplifyframework.hub.HubChannel;
 import com.amplifyframework.hub.HubEvent;
@@ -48,6 +51,7 @@ final class MutationProcessor {
     private static final long ITEM_PROCESSING_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
 
     private final VersionRepository versionRepository;
+    private final ModelSchemaRegistry modelSchemaRegistry;
     private final Merger merger;
     private final AppSync appSync;
     private final MutationOutbox mutationOutbox;
@@ -56,10 +60,12 @@ final class MutationProcessor {
     MutationProcessor(
             @NonNull Merger merger,
             @NonNull VersionRepository versionRepository,
+            @NonNull ModelSchemaRegistry modelSchemaRegistry,
             @NonNull MutationOutbox mutationOutbox,
             @NonNull AppSync appSync) {
         this.merger = Objects.requireNonNull(merger);
         this.versionRepository = Objects.requireNonNull(versionRepository);
+        this.modelSchemaRegistry = modelSchemaRegistry;
         this.appSync = Objects.requireNonNull(appSync);
         this.mutationOutbox = Objects.requireNonNull(mutationOutbox);
         this.ongoingOperationsDisposable = new CompositeDisposable();
@@ -211,26 +217,33 @@ final class MutationProcessor {
     // For an item in the outbox, dispatch an update mutation
     private <T extends Model> Single<ModelWithMetadata<T>> update(PendingMutation<T> mutation) {
         final T updatedItem = mutation.getMutatedItem();
+        final ModelSchema updatedItemSchema =
+                this.modelSchemaRegistry.getModelSchemaForModelClass(getModelName(updatedItem));
         return versionRepository.findModelVersion(updatedItem).flatMap(version ->
             publishWithStrategy(mutation, (model, onSuccess, onError) ->
-                appSync.update(model, version, mutation.getPredicate(), onSuccess, onError)
+                appSync.update(model, updatedItemSchema, version, mutation.getPredicate(), onSuccess, onError)
             )
         );
     }
 
     // For an item in the outbox, dispatch a create mutation
     private <T extends Model> Single<ModelWithMetadata<T>> create(PendingMutation<T> mutation) {
-        return publishWithStrategy(mutation, appSync::create);
+        final T createdItem = mutation.getMutatedItem();
+        final ModelSchema createdItemSchema =
+                this.modelSchemaRegistry.getModelSchemaForModelClass(getModelName(createdItem));
+        return publishWithStrategy(mutation, (model, onSuccess, onError) ->
+                appSync.create(model, createdItemSchema, onSuccess, onError));
     }
 
     // For an item in the outbox, dispatch a delete mutation
     private <T extends Model> Single<ModelWithMetadata<T>> delete(PendingMutation<T> mutation) {
         final T deletedItem = mutation.getMutatedItem();
-        final Class<T> deletedItemClass = mutation.getClassOfMutatedItem();
+        final ModelSchema deletedItemSchema =
+                this.modelSchemaRegistry.getModelSchemaForModelClass(getModelName(deletedItem));
         return versionRepository.findModelVersion(deletedItem).flatMap(version ->
             publishWithStrategy(mutation, (model, onSuccess, onError) ->
                 appSync.delete(
-                    deletedItemClass, deletedItem.getId(), version, mutation.getPredicate(), onSuccess, onError
+                        deletedItemSchema, deletedItem.getId(), version, mutation.getPredicate(), onSuccess, onError
                 )
             )
         );
@@ -265,6 +278,14 @@ final class MutationProcessor {
                 subscriber::onError
             )
         ));
+    }
+
+    private String getModelName(@NonNull Model model) {
+        if (model.getClass() == SerializedModel.class) {
+            return ((SerializedModel) model).getModelName();
+        } else {
+            return model.getClass().getSimpleName();
+        }
     }
 
     /**

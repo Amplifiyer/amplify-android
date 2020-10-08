@@ -97,7 +97,12 @@ public final class Orchestrator {
         Merger merger = new Merger(mutationOutbox, versionRepository, localStorageAdapter);
         SyncTimeRegistry syncTimeRegistry = new SyncTimeRegistry(localStorageAdapter);
 
-        this.mutationProcessor = new MutationProcessor(merger, versionRepository, mutationOutbox, appSync);
+        this.mutationProcessor = new MutationProcessor(
+                merger,
+                versionRepository,
+                modelSchemaRegistry,
+                mutationOutbox,
+                appSync);
         this.syncProcessor = SyncProcessor.builder()
             .modelProvider(modelProvider)
             .modelSchemaRegistry(modelSchemaRegistry)

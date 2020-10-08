@@ -13,7 +13,7 @@
  * permissions and limitations under the License.
  */
 
-package com.amplifyframework.api.aws;
+package com.amplifyframework.core.util;
 
 import com.amplifyframework.util.Immutable;
 
@@ -27,13 +27,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-final class GsonUtil {
+/**
+ * Util for converting JsonObject to java objects.
+ */
+public final class GsonUtil {
 
     private GsonUtil() {
         throw new UnsupportedOperationException("No instances allowed.");
     }
 
-    static Map<String, Object> toMap(JsonObject object) {
+    /**
+     * Convert the JsonObject to java map.
+     * @param object jsonObject representing a json map
+     * @return java map
+     */
+    public static Map<String, Object> toMap(JsonObject object) {
         Map<String, Object> map = new HashMap<>();
         for (String key : object.keySet()) {
             JsonElement element = object.get(key);
@@ -42,7 +50,12 @@ final class GsonUtil {
         return Immutable.of(map);
     }
 
-    static List<Object> toList(JsonArray array) {
+    /**
+     * Convert the JsonArray to java list.
+     * @param array JsonArray representing a json array
+     * @return corresponding java list
+     */
+    public static List<Object> toList(JsonArray array) {
         List<Object> list = new ArrayList<>();
         for (int i = 0; i < array.size(); i++) {
             JsonElement element = array.get(i);
@@ -51,7 +64,12 @@ final class GsonUtil {
         return Immutable.of(list);
     }
 
-    private static Object toObject(JsonElement element) {
+    /**
+     * Convert the JsonElement to java object.
+     * @param element JsonElement representing a json
+     * @return corresponding java object (primitive/list/map)
+     */
+    public static Object toObject(JsonElement element) {
         if (element != null) {
             if (element.isJsonArray()) {
                 return toList(element.getAsJsonArray());

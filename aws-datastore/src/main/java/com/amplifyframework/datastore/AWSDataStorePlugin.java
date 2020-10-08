@@ -37,6 +37,7 @@ import com.amplifyframework.core.model.query.Where;
 import com.amplifyframework.core.model.query.predicate.QueryPredicate;
 import com.amplifyframework.core.model.query.predicate.QueryPredicates;
 import com.amplifyframework.datastore.appsync.AppSyncClient;
+import com.amplifyframework.datastore.appsync.SerializedModel;
 import com.amplifyframework.datastore.model.ModelProviderLocator;
 import com.amplifyframework.datastore.storage.LocalStorageAdapter;
 import com.amplifyframework.datastore.storage.StorageItemChange;
@@ -351,6 +352,18 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
      * {@inheritDoc}
      */
     @Override
+    public void query(
+            @NonNull String modelName,
+            @NonNull QueryOptions options,
+            @NonNull Consumer<Iterator<? extends Model>> onQueryResults,
+            @NonNull Consumer<DataStoreException> onQueryFailure) {
+        beforeOperation(() -> sqliteStorageAdapter.query(modelName, options, onQueryResults, onQueryFailure));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public <T extends Model> void query(
             @NonNull Class<T> itemClass,
             @NonNull QueryPredicate queryPredicate,
@@ -402,6 +415,33 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
                         @SuppressWarnings("unchecked") // This was just checked, right above.
                         StorageItemChange<T> typedChange = (StorageItemChange<T>) itemChange;
                         onDataStoreItemChange.accept(toDataStoreItemChange(typedChange));
+                    }
+                } catch (DataStoreException dataStoreException) {
+                    onObservationFailure.accept(dataStoreException);
+                }
+            },
+            onObservationFailure,
+            onObservationCompleted
+        )));
+    }
+
+    @Override
+    public void observe(
+            @NonNull String modelName,
+            @NonNull Consumer<Cancelable> onObservationStarted,
+            @NonNull Consumer<DataStoreItemChange<? extends Model>> onDataStoreItemChange,
+            @NonNull Consumer<DataStoreException> onObservationFailure,
+            @NonNull Action onObservationCompleted) {
+        beforeOperation(() -> onObservationStarted.accept(sqliteStorageAdapter.observe(
+            itemChange -> {
+                try {
+                    if (itemChange.itemClass().equals(SerializedModel.class)) {
+                        if (((SerializedModel) itemChange.item()).getModelName().equals(modelName)) {
+                            @SuppressWarnings("unchecked") // This was just checked, right above.
+                            StorageItemChange<SerializedModel> typedChange =
+                                    (StorageItemChange<SerializedModel>) itemChange;
+                            onDataStoreItemChange.accept(toDataStoreItemChange(typedChange));
+                        }
                     }
                 } catch (DataStoreException dataStoreException) {
                     onObservationFailure.accept(dataStoreException);

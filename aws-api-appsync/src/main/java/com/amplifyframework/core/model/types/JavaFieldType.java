@@ -69,7 +69,7 @@ public enum JavaFieldType {
      * Represents the Timestamp data type.
      */
     TIMESTAMP(Temporal.Timestamp.class.getSimpleName()),
-    
+
     /**
      * Represents the Enum type.
      */
