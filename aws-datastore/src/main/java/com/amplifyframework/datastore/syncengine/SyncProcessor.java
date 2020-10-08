@@ -376,28 +376,9 @@ final class SyncProcessor {
                     TopologicalOrdering.forRegisteredModels(modelSchemaRegistry, modelProvider);
         }
 
-        private <M extends Class<? extends Model>> int compare(M left, M right) {
-            return topologicalOrdering.compare(schemaFor(left), schemaFor(right));
-        }
-
         private int compareSchema(ModelSchema left, ModelSchema right) {
             return topologicalOrdering.compare(left, right);
         }
 
-        /**
-         * Gets the model schema for a model.
-         * @param modelCls A model with metadata about it
-         * @param <M> Type for ModelWithMetadata containing arbitrary model instances
-         * @return Model Schema for model
-         */
-        @NonNull
-        private <M extends Class<? extends Model>> ModelSchema schemaFor(M modelCls) {
-            // Todo, how to get the right model class now.
-//            if (modelCls.getClass() == SerializedModel.class) {
-//                return modelSchemaRegistry.getModelSchemaForModelClass(
-//                    ((SerializedModel) modelCls.getModel()).getModelName());
-//            }
-            return modelSchemaRegistry.getModelSchemaForModelClass(modelCls.getSimpleName());
-        }
     }
 }

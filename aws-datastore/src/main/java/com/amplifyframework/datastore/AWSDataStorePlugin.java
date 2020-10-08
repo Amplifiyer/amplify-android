@@ -354,9 +354,10 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
     @Override
     public void query(
             @NonNull String modelName,
+            @NonNull QueryOptions options,
             @NonNull Consumer<Iterator<? extends Model>> onQueryResults,
             @NonNull Consumer<DataStoreException> onQueryFailure) {
-        beforeOperation(() -> sqliteStorageAdapter.query(modelName, onQueryResults, onQueryFailure));
+        beforeOperation(() -> sqliteStorageAdapter.query(modelName, options, onQueryResults, onQueryFailure));
     }
 
     /**
